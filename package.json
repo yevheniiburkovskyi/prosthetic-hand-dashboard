@@ -43,6 +43,9 @@
     "vite": "^7.2.4"
   },
   "lint-staged": {
-    "**/*.(ts|tsx|js|jsx|json|css|md)": "yarn format"
+    "**/*.(ts|tsx|js|jsx|json|css|md)": [
+      "yarn format",
+      "git add"
+    ]
   }
 }
