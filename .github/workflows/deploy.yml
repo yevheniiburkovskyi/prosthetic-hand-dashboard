@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: 'pages'
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,25 +23,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: 'yarn'
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+
       - name: Check formatting
         run: yarn prettier --check .
+
       - name: Build
         run: yarn build
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+
       - name: Upload artifact
+        # Цей крок створює архів для деплою
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
