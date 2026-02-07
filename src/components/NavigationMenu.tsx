@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom';
 
 const NavigationMenu = () => {
   return (
-    <aside className="min-w-[250px] border-r border-neutral-200 bg-neutral-50 py-4">
+    <aside className="h-screen min-w-[250px] border-r border-neutral-200 bg-neutral-50 py-4">
       <Link className="mb-4 flex items-center gap-2 px-4" to="/">
         <Activity />
         <h3 className="text-xl font-semibold">Sensor System</h3>

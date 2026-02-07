@@ -120,6 +120,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    overflow: hidden;
   }
 
   button:not(:disabled),

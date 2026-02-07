@@ -4,10 +4,10 @@ import Temperature from './pages/Temperature';
 
 const App = () => {
   return (
-    <main className="bg-background flex min-h-screen">
+    <main className="bg-background flex h-screen">
       <NavigationMenu />
 
-      <section className="flex h-full w-full flex-col gap-4 p-6">
+      <section className="flex h-full w-full flex-col gap-4">
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/temperature" element={<Temperature />} />

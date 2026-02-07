@@ -9,7 +9,7 @@ interface Props extends React.HTMLAttributes<HTMLElement> {
 
 const Header = ({ title, description, ...props }: Props) => {
   return (
-    <header className="flex w-full justify-between" {...props}>
+    <header className="flex w-full justify-between px-6 pt-6" {...props}>
       <div>
         <h1 className="text-3xl font-semibold">{title}</h1>
         {description && <p className="text-neutral-500">{description}</p>}

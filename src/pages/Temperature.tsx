@@ -45,7 +45,7 @@ const Temperature = () => {
         title="Temperature sensors"
         description="Temperature sensor control"
       />
-      <div>
+      <div className="overflow-auto px-6">
         <ul className="mb-4 flex w-full flex-wrap gap-4">
           {mockedTemperature.map((sensor) => (
             <li key={sensor.id} className="flex-1">
