@@ -1,4 +1,5 @@
 import Header from '@/components/Header';
+import LinearChart from '@/components/LinearChart';
 import Card from '@/components/ui/Card';
 import { Thermometer } from 'lucide-react';
 import { memo } from 'react';
@@ -45,7 +46,7 @@ const Temperature = () => {
         description="Temperature sensor control"
       />
       <div>
-        <ul className="flex w-full flex-wrap gap-4">
+        <ul className="mb-4 flex w-full flex-wrap gap-4">
           {mockedTemperature.map((sensor) => (
             <li key={sensor.id} className="flex-1">
               <Card>
@@ -60,6 +61,8 @@ const Temperature = () => {
             </li>
           ))}
         </ul>
+
+        <LinearChart />
       </div>
     </>
   );

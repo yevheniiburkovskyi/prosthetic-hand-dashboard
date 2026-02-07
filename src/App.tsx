@@ -7,7 +7,7 @@ const App = () => {
     <main className="bg-background flex min-h-screen">
       <NavigationMenu />
 
-      <section className="flex w-full flex-col gap-4 p-6">
+      <section className="flex h-full w-full flex-col gap-4 p-6">
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/temperature" element={<Temperature />} />
