@@ -3,8 +3,8 @@ import {
   Flame,
   Gauge,
   LayoutDashboard,
-  Radio,
   Thermometer,
+  Vibrate,
 } from 'lucide-react';
 import { memo } from 'react';
 import NavigationItem from './ui/NavigationItem';
@@ -26,7 +26,7 @@ const NavigationMenu = () => {
           icon={Thermometer}
         />
         <NavigationItem label={'FSR Sensor'} to={'/fsr'} icon={Gauge} />
-        <NavigationItem label={'Vibration'} to={'/vibration'} icon={Radio} />
+        <NavigationItem label={'Vibration'} to={'/vibration'} icon={Vibrate} />
         <NavigationItem label={'Heating'} to={'/heating'} icon={Flame} />
       </nav>
     </aside>
