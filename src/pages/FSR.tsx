@@ -46,8 +46,10 @@ const FSR = () => {
                     <p className="text-md font-semibold">{sensor.name}</p>
                     <Gauge />
                   </div>
-                  <p className="text-2xl font-bold">{sensor.value}</p>
-                  <Progress value={(sensor.value / MAX_FSR_VALUE) * 100} />
+                  <div>
+                    <p className="mb-2 text-2xl font-bold">{sensor.value}</p>
+                    <Progress value={(sensor.value / MAX_FSR_VALUE) * 100} />
+                  </div>
                 </div>
               </Card>
             </li>
