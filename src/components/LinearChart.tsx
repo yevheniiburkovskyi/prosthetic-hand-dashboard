@@ -237,7 +237,7 @@ const ChartLineMultiple = () => {
       <p className="mb-4 text-sm text-neutral-500">
         Real-time temperature data from all sensors
       </p>
-      <ChartContainer config={chartConfig} className="h-[55vh] w-full">
+      <ChartContainer config={chartConfig} className="h-[50vh] w-full">
         <LineChart accessibilityLayer data={chartData}>
           <CartesianGrid />
           <XAxis

@@ -1,6 +1,8 @@
 import Header from '@/components/Header';
 import LinearChart from '@/components/LinearChart';
+import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/Card';
+import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo } from 'react';
 
@@ -38,6 +40,17 @@ const mockedTemperature = [
   },
 ];
 
+const NORMAL_TEMPERATURE_LIMIT = 23;
+
+const getTemperatureBadge = (value: number) => {
+  switch (true) {
+    case value > NORMAL_TEMPERATURE_LIMIT:
+      return <Badge variant="error" title="High" />;
+    default:
+      return <Badge variant="success" title="Normal" />;
+  }
+};
+
 const Temperature = () => {
   return (
     <>
@@ -49,13 +62,24 @@ const Temperature = () => {
         <ul className="mb-4 flex w-full flex-wrap gap-4">
           {mockedTemperature.map((sensor) => (
             <li key={sensor.id} className="flex-1">
-              <Card>
+              <Card
+                className={clsx({
+                  'border-red-500': sensor.value > NORMAL_TEMPERATURE_LIMIT,
+                })}
+              >
                 <div className="flex flex-col justify-between gap-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-md font-semibold">{sensor.name}</p>
-                    <Thermometer />
+                    <Thermometer
+                      stroke={
+                        sensor.value > NORMAL_TEMPERATURE_LIMIT
+                          ? 'var(--color-red-500)'
+                          : 'currentColor'
+                      }
+                    />
                   </div>
                   <p className="text-2xl font-bold">{sensor.value}°C</p>
+                  {getTemperatureBadge(sensor.value)}
                 </div>
               </Card>
             </li>
