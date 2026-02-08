@@ -74,8 +74,10 @@ const Temperature = () => {
                       }
                     />
                   </div>
-                  <p className="text-2xl font-bold">{sensor.value}°C</p>
-                  {getTemperatureBadge(sensor.value)}
+                  <div className="flex items-center justify-between">
+                    <p className="text-2xl font-bold">{sensor.value}°C</p>
+                    {getTemperatureBadge(sensor.value)}
+                  </div>
                 </div>
               </Card>
             </li>
