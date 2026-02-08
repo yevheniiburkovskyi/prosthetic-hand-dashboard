@@ -7,6 +7,7 @@ import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo } from 'react';
 import { chartData, mockedTemperature } from '@/mocks/temperatureMocks';
+import { TEMPERATURE_LIMIT } from '@/lib/constants';
 
 interface Temperature {
   id: number;
@@ -37,11 +38,9 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const NORMAL_TEMPERATURE_LIMIT = 23;
-
 const getTemperatureBadge = (value: number) => {
   switch (true) {
-    case value > NORMAL_TEMPERATURE_LIMIT:
+    case value > TEMPERATURE_LIMIT:
       return <Badge variant="error" title="High" />;
     default:
       return <Badge variant="success" title="Normal" />;
@@ -61,7 +60,7 @@ const Temperature = () => {
             <li key={sensor.id} className="flex-1">
               <Card
                 className={clsx({
-                  'border-red-500': sensor.value > NORMAL_TEMPERATURE_LIMIT,
+                  'border-red-500': sensor.value > TEMPERATURE_LIMIT,
                 })}
               >
                 <div className="flex flex-col justify-between gap-4">
@@ -69,7 +68,7 @@ const Temperature = () => {
                     <p className="text-md font-semibold">{sensor.name}</p>
                     <Thermometer
                       stroke={
-                        sensor.value > NORMAL_TEMPERATURE_LIMIT
+                        sensor.value > TEMPERATURE_LIMIT
                           ? 'var(--color-red-500)'
                           : 'currentColor'
                       }

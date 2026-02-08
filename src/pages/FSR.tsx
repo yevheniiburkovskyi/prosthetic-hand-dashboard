@@ -7,6 +7,7 @@ import { Gauge } from 'lucide-react';
 import { memo } from 'react';
 import { chartData, mockedFSR } from '@/mocks/fsrMocks';
 import { Progress } from '@/components/ui/progress';
+import { MAX_FSR_VALUE } from '@/lib/constants';
 
 const chartConfig = {
   thumb: {
@@ -30,8 +31,6 @@ const chartConfig = {
     color: 'var(--chart-5)',
   },
 } satisfies ChartConfig;
-
-const MAX_FSR_VALUE = 1023;
 
 const FSR = () => {
   return (
