@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import NavigationMenu from './components/NavigationMenu';
 import Temperature from './pages/Temperature';
+import FSR from './pages/FSR';
 
 const App = () => {
   return (
@@ -11,7 +12,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/temperature" element={<Temperature />} />
-          <Route path="/fsr-sensor" element={<div>FSR Sensor</div>} />
+          <Route path="/fsr" element={<FSR />} />
           <Route path="/vibration" element={<div>Vibration</div>} />
           <Route path="/heating" element={<div>Heating</div>} />
         </Routes>

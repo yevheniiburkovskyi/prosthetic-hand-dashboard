@@ -25,7 +25,7 @@ const NavigationMenu = () => {
           to={'/temperature'}
           icon={Thermometer}
         />
-        <NavigationItem label={'FSR Sensor'} to={'/fsr-sensor'} icon={Gauge} />
+        <NavigationItem label={'FSR Sensor'} to={'/fsr'} icon={Gauge} />
         <NavigationItem label={'Vibration'} to={'/vibration'} icon={Radio} />
         <NavigationItem label={'Heating'} to={'/heating'} icon={Flame} />
       </nav>
