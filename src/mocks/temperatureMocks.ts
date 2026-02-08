@@ -7,7 +7,7 @@ export const mockedTemperature = [
   {
     id: 2,
     name: 'Index',
-    value: 23.0,
+    value: 120,
   },
   {
     id: 3,

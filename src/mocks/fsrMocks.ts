@@ -17,7 +17,7 @@ export const mockedFSR = [
   {
     id: 4,
     name: 'Ring',
-    value: 245,
+    value: 845,
   },
   {
     id: 5,
