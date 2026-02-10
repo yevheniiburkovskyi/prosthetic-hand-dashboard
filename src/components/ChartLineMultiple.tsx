@@ -20,6 +20,9 @@ import {
 import Card from './ui/Card';
 import { memo } from 'react';
 import type { CategoricalChartProps } from 'recharts/types/chart/generateCategoricalChart';
+import type { AxisDomain } from 'recharts/types/util/types';
+import { Button } from './ui/button';
+import { Pause, Play } from 'lucide-react';
 
 export const description = 'A multiple line chart';
 
@@ -34,6 +37,10 @@ interface ChartLineMultipleProps {
   yLabel: string;
   xAxisTickFormatter?: XAxisProps['tickFormatter'];
   yAxisTickFormatter?: YAxisProps['tickFormatter'];
+  xAxisDomain?: AxisDomain;
+  yAxisDomain?: AxisDomain;
+  toggleChart?: () => void;
+  isRunning?: boolean;
 }
 
 const ChartLineMultiple = ({
@@ -47,13 +54,24 @@ const ChartLineMultiple = ({
   yLabel,
   xAxisTickFormatter,
   yAxisTickFormatter,
+  yAxisDomain,
+  toggleChart,
+  isRunning,
 }: ChartLineMultipleProps) => {
   return (
     <Card>
-      <div className="mb-4">
-        {title && <p className="text-semibold text-lg">{title}</p>}
-        {description && (
-          <p className="text-sm text-neutral-500">{description}</p>
+      <div className="mb-4 flex justify-between">
+        <div>
+          {title && <p className="text-semibold text-lg">{title}</p>}
+          {description && (
+            <p className="text-sm text-neutral-500">{description}</p>
+          )}
+        </div>
+        {toggleChart && (
+          <Button onClick={toggleChart}>
+            {isRunning ? <Pause /> : <Play />}
+            {isRunning ? 'Pause' : 'Run'}
+          </Button>
         )}
       </div>
       <ChartContainer config={config} className="h-[50vh] w-full">
@@ -66,6 +84,8 @@ const ChartLineMultiple = ({
             tickMargin={3}
             tickFormatter={xAxisTickFormatter}
             label={{ value: xLabel, position: 'insideBottom', offset: -5 }}
+            type="number"
+            domain={['dataMin', 'dataMax']}
           />
           <YAxis
             dataKey={yAxisKey}
@@ -78,6 +98,7 @@ const ChartLineMultiple = ({
               position: 'insideLeft',
             }}
             tickFormatter={yAxisTickFormatter}
+            domain={yAxisDomain}
           />
           <Legend verticalAlign="top" height={30} />
           <ChartTooltip cursor={false} content={<ChartTooltipContent />} />

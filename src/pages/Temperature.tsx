@@ -5,8 +5,8 @@ import Card from '@/components/ui/Card';
 import type { ChartConfig } from '@/components/ui/chart';
 import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
-import { memo } from 'react';
-import { chartData, mockedTemperature } from '@/mocks/temperatureMocks';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { mockedTemperature } from '@/mocks/temperatureMocks';
 import { TEMPERATURE_LIMIT } from '@/lib/constants';
 
 interface Temperature {
@@ -47,7 +47,65 @@ const getTemperatureBadge = (value: number) => {
   }
 };
 
+const yAxisTickFormatter = (value: number) => `${value}°C`;
+const xAxisTickFormatter = (value: number) => `${value}s`;
+const yAxisDomain = [0, 100];
+
 const Temperature = () => {
+  const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
+    useState<boolean>(true);
+
+  const [chartData, setChartData] = useState([
+    {
+      time: 0,
+      thumb: 0,
+      index: 0,
+      middle: 0,
+      ring: 0,
+      pinky: 0,
+    },
+  ]);
+
+  const toggleRealTimeChart = useCallback(() => {
+    setIsRealTimeChartRunning((prev) => {
+      return !prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    // Simulate real-time data updates
+    const interval = setInterval(() => {
+      if (!isRealTimeChartRunning) {
+        return;
+      }
+
+      setChartData((prevData) => {
+        const lastTime =
+          prevData.length > 0 ? prevData[prevData.length - 1].time : 0;
+
+        const isMoreThanALimit = prevData.length > 100;
+
+        if (isMoreThanALimit) {
+          return prevData.slice(1);
+        }
+
+        return [
+          ...prevData,
+          {
+            time: Number((lastTime + 0.02).toFixed(2)),
+            thumb: 20 + Math.random() * 50,
+            index: 20 + Math.random() * 50,
+            middle: 20 + Math.random() * 50,
+            ring: 20 + Math.random() * 50,
+            pinky: 20 + Math.random() * 50,
+          },
+        ];
+      });
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [isRealTimeChartRunning]);
+
   return (
     <>
       <Header
@@ -92,8 +150,11 @@ const Temperature = () => {
           xAxisKey="time"
           xLabel="Time"
           yLabel="Temperature (°C)"
-          yAxisTickFormatter={(value) => `${value}°C`}
-          xAxisTickFormatter={(value) => `${value}s`}
+          yAxisTickFormatter={yAxisTickFormatter}
+          xAxisTickFormatter={xAxisTickFormatter}
+          yAxisDomain={yAxisDomain}
+          toggleChart={toggleRealTimeChart}
+          isRunning={isRealTimeChartRunning}
         />
       </div>
     </>
