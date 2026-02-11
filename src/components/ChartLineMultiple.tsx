@@ -22,9 +22,8 @@ import { memo } from 'react';
 import type { CategoricalChartProps } from 'recharts/types/chart/generateCategoricalChart';
 import type { AxisDomain } from 'recharts/types/util/types';
 import { Button } from './ui/button';
-import { Pause, Play } from 'lucide-react';
-
-export const description = 'A multiple line chart';
+import { Pause, Play, Square } from 'lucide-react';
+import { ChartMode } from '@/types/chartType';
 
 interface ChartLineMultipleProps {
   data: CategoricalChartProps['data'];
@@ -39,8 +38,10 @@ interface ChartLineMultipleProps {
   yAxisTickFormatter?: YAxisProps['tickFormatter'];
   xAxisDomain?: AxisDomain;
   yAxisDomain?: AxisDomain;
-  toggleChart?: () => void;
+  toggleCommonChartMode?: () => void;
+  toggleLogsChartMode?: () => void;
   isRunning?: boolean;
+  chartMode?: ChartMode;
 }
 
 const ChartLineMultiple = ({
@@ -55,9 +56,14 @@ const ChartLineMultiple = ({
   xAxisTickFormatter,
   yAxisTickFormatter,
   yAxisDomain,
-  toggleChart,
+  toggleCommonChartMode,
+  toggleLogsChartMode,
   isRunning,
+  chartMode = ChartMode.COMMON,
 }: ChartLineMultipleProps) => {
+  const isLogsModeRunning = isRunning && chartMode === ChartMode.LOGS;
+  const isCommonModeRunning = isRunning && chartMode === ChartMode.COMMON;
+
   return (
     <Card>
       <div className="mb-4 flex justify-between">
@@ -67,12 +73,31 @@ const ChartLineMultiple = ({
             <p className="text-sm text-neutral-500">{description}</p>
           )}
         </div>
-        {toggleChart && (
-          <Button onClick={toggleChart}>
-            {isRunning ? <Pause /> : <Play />}
-            {isRunning ? 'Pause' : 'Run'}
-          </Button>
-        )}
+        {
+          <div className="flex gap-2">
+            {toggleLogsChartMode && (
+              <Button
+                onClick={toggleLogsChartMode}
+                disabled={isCommonModeRunning}
+              >
+                {isLogsModeRunning
+                  ? 'Stop logs collecting'
+                  : 'Run with logs collecting'}
+                {isLogsModeRunning ? <Square /> : <Play />}
+              </Button>
+            )}
+            {toggleCommonChartMode && (
+              <Button
+                onClick={toggleCommonChartMode}
+                className="max-w-min"
+                disabled={isLogsModeRunning}
+              >
+                {isCommonModeRunning ? 'Pause' : 'Run'}
+                {isCommonModeRunning ? <Pause /> : <Play />}
+              </Button>
+            )}
+          </div>
+        }
       </div>
       <ChartContainer config={config} className="h-[50vh] w-full">
         <LineChart accessibilityLayer data={data}>

@@ -8,6 +8,7 @@ import { Thermometer } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { mockedTemperature } from '@/mocks/temperatureMocks';
 import { TEMPERATURE_LIMIT } from '@/lib/constants';
+import { ChartMode } from '@/types/chartType';
 
 interface Temperature {
   id: number;
@@ -55,6 +56,8 @@ const Temperature = () => {
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
     useState<boolean>(true);
 
+  const [chartMode, setChartMode] = useState<ChartMode>(ChartMode.COMMON);
+
   const [chartData, setChartData] = useState([
     {
       time: 0,
@@ -66,7 +69,15 @@ const Temperature = () => {
     },
   ]);
 
-  const toggleRealTimeChart = useCallback(() => {
+  const toggleCommonChartMode = useCallback(() => {
+    setChartMode(ChartMode.COMMON);
+    setIsRealTimeChartRunning((prev) => {
+      return !prev;
+    });
+  }, []);
+
+  const toggleLogsChartMode = useCallback(() => {
+    setChartMode(ChartMode.LOGS);
     setIsRealTimeChartRunning((prev) => {
       return !prev;
     });
@@ -153,7 +164,9 @@ const Temperature = () => {
           yAxisTickFormatter={yAxisTickFormatter}
           xAxisTickFormatter={xAxisTickFormatter}
           yAxisDomain={yAxisDomain}
-          toggleChart={toggleRealTimeChart}
+          chartMode={chartMode}
+          toggleCommonChartMode={toggleCommonChartMode}
+          toggleLogsChartMode={toggleLogsChartMode}
           isRunning={isRealTimeChartRunning}
         />
       </div>
