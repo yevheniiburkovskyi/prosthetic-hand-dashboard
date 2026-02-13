@@ -5,7 +5,7 @@ import Card from '@/components/ui/Card';
 import type { ChartConfig } from '@/components/ui/chart';
 import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { mockedTemperature } from '@/mocks/temperatureMocks';
 import { TEMPERATURE_LIMIT } from '@/lib/constants';
 import { ChartMode } from '@/types/chartType';
@@ -50,9 +50,12 @@ const getTemperatureBadge = (value: number) => {
 
 const yAxisTickFormatter = (value: number) => `${value}°C`;
 const xAxisTickFormatter = (value: number) => `${value}s`;
+
 const yAxisDomain = [0, 100];
 
 const Temperature = () => {
+  const logs = useRef<string[]>([]);
+
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
     useState<boolean>(true);
 
@@ -71,16 +74,12 @@ const Temperature = () => {
 
   const toggleCommonChartMode = useCallback(() => {
     setChartMode(ChartMode.COMMON);
-    setIsRealTimeChartRunning((prev) => {
-      return !prev;
-    });
+    setIsRealTimeChartRunning((prev) => !prev);
   }, []);
 
   const toggleLogsChartMode = useCallback(() => {
     setChartMode(ChartMode.LOGS);
-    setIsRealTimeChartRunning((prev) => {
-      return !prev;
-    });
+    setIsRealTimeChartRunning((prev) => !prev);
   }, []);
 
   useEffect(() => {
@@ -96,26 +95,31 @@ const Temperature = () => {
 
         const isMoreThanALimit = prevData.length > 100;
 
+        const measure = {
+          time: Number((lastTime + 0.02).toFixed(2)),
+          thumb: 20 + Math.random() * 50,
+          index: 20 + Math.random() * 50,
+          middle: 20 + Math.random() * 50,
+          ring: 20 + Math.random() * 50,
+          pinky: 20 + Math.random() * 50,
+        };
+
+        if (chartMode === ChartMode.LOGS) {
+          logs.current.push(
+            `Time: ${lastTime.toFixed(2)}s, Thumb: ${measure.thumb}, Index: ${measure.index}, Middle: ${measure.middle}, Ring: ${measure.ring}, Pinky: ${measure.pinky}`
+          );
+        }
+
         if (isMoreThanALimit) {
           return prevData.slice(1);
         }
 
-        return [
-          ...prevData,
-          {
-            time: Number((lastTime + 0.02).toFixed(2)),
-            thumb: 20 + Math.random() * 50,
-            index: 20 + Math.random() * 50,
-            middle: 20 + Math.random() * 50,
-            ring: 20 + Math.random() * 50,
-            pinky: 20 + Math.random() * 50,
-          },
-        ];
+        return [...prevData, measure];
       });
     }, 20);
 
     return () => clearInterval(interval);
-  }, [isRealTimeChartRunning]);
+  }, [chartMode, isRealTimeChartRunning]);
 
   return (
     <>
