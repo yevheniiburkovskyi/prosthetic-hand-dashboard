@@ -1,7 +1,8 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Button } from './ui/button';
-import { Bluetooth } from 'lucide-react';
+import { Bluetooth, Loader, Unplug } from 'lucide-react';
 import { useBLEContext } from '@/context/BLEContext';
+import { Badge } from './ui/badge';
 
 interface Props extends React.HTMLAttributes<HTMLElement> {
   title: string;
@@ -9,7 +10,33 @@ interface Props extends React.HTMLAttributes<HTMLElement> {
 }
 
 const Header = ({ title, description, ...props }: Props) => {
-  const { connectBluetooth } = useBLEContext();
+  const {
+    connectServer,
+    connectService,
+    subscribeForCharacteristic,
+    disconnectServer,
+    isBLEConnected,
+    isBLEConnecting,
+  } = useBLEContext();
+
+  const connectBluetooth = async () => {
+    await connectServer();
+    await connectService();
+    await subscribeForCharacteristic();
+  };
+
+  const BadgeComponent = useMemo(() => {
+    switch (true) {
+      case isBLEConnected:
+        return <Badge variant="success" title="Connected" className="h-9" />;
+      case isBLEConnecting:
+        return (
+          <Badge variant="warning" title="Connecting..." className="h-9" />
+        );
+      default:
+        return <Badge variant="error" title="Disconnected" className="h-9" />;
+    }
+  }, [isBLEConnected, isBLEConnecting]);
 
   return (
     <header className="flex w-full justify-between px-6 pt-6" {...props}>
@@ -17,10 +44,19 @@ const Header = ({ title, description, ...props }: Props) => {
         <h1 className="text-3xl font-semibold">{title}</h1>
         {description && <p className="text-neutral-500">{description}</p>}
       </div>
-      <Button onClick={connectBluetooth}>
-        <Bluetooth />
-        Connect Device
-      </Button>
+      <div className="flex items-center gap-4">
+        {BadgeComponent}
+        <Button
+          onClick={isBLEConnected ? disconnectServer : connectBluetooth}
+          disabled={isBLEConnecting}
+        >
+          {!isBLEConnecting && (isBLEConnected ? <Unplug /> : <Bluetooth />)}
+          {!isBLEConnecting &&
+            (isBLEConnected ? 'Disconnect Device' : 'Connect Device')}
+          {isBLEConnecting && <Loader className="animate-spin" />}
+          {isBLEConnecting && 'Connecting...'}
+        </Button>
+      </div>
     </header>
   );
 };

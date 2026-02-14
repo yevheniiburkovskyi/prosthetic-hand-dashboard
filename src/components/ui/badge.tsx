@@ -60,8 +60,12 @@ interface BadgeProps extends React.ComponentProps<'span'> {
   variant: BadgeVariant;
 }
 
-const BadgeCustom = memo(({ title, variant }: BadgeProps) => {
-  return <Badge className={badgeVariantStyles[variant]}>{title}</Badge>;
+const BadgeCustom = memo(({ title, variant, className }: BadgeProps) => {
+  return (
+    <Badge className={cn(badgeVariantStyles[variant], className)}>
+      {title}
+    </Badge>
+  );
 });
 
 export { BadgeCustom as Badge };
