@@ -6,35 +6,30 @@ import type { ChartConfig } from '@/components/ui/chart';
 import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { mockedTemperature } from '@/mocks/temperatureMocks';
-import { TEMPERATURE_LIMIT } from '@/lib/constants';
+import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
 import { ChartMode } from '@/types/chartType';
-
-interface Temperature {
-  id: number;
-  name: string;
-  value: number;
-}
+import { TemperatureName } from '@/types/temperatureType';
+import { useBLEContext } from '@/context/BLEContext';
 
 const chartConfig = {
   thumb: {
-    label: 'Thumb',
+    label: TemperatureName.THUMB,
     color: 'var(--chart-1)',
   },
   index: {
-    label: 'Index',
+    label: TemperatureName.INDEX,
     color: 'var(--chart-2)',
   },
   middle: {
-    label: 'Middle',
+    label: TemperatureName.MIDDLE,
     color: 'var(--chart-3)',
   },
   ring: {
-    label: 'Ring',
+    label: TemperatureName.RING,
     color: 'var(--chart-4)',
   },
   pinky: {
-    label: 'Pinky',
+    label: TemperatureName.PINKY,
     color: 'var(--chart-5)',
   },
 } satisfies ChartConfig;
@@ -54,6 +49,8 @@ const xAxisTickFormatter = (value: number) => `${value}s`;
 const yAxisDomain = [0, 100];
 
 const Temperature = () => {
+  const { temperatureData } = useBLEContext();
+
   const logs = useRef<string[]>([]);
 
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
@@ -64,11 +61,11 @@ const Temperature = () => {
   const [chartData, setChartData] = useState([
     {
       time: 0,
-      thumb: 0,
-      index: 0,
-      middle: 0,
-      ring: 0,
-      pinky: 0,
+      thumb: temperatureData[TEMPERATURE_THUMB_UUID].value,
+      index: temperatureData['index'].value,
+      middle: temperatureData['middle'].value,
+      ring: temperatureData['ring'].value,
+      pinky: temperatureData['pinky'].value,
     },
   ]);
 
@@ -82,44 +79,45 @@ const Temperature = () => {
     setIsRealTimeChartRunning((prev) => !prev);
   }, []);
 
+  const startTimeRef = useRef<number | null>(null);
+
   useEffect(() => {
-    // Simulate real-time data updates
-    const interval = setInterval(() => {
-      if (!isRealTimeChartRunning) {
-        return;
+    if (!isRealTimeChartRunning) {
+      startTimeRef.current = null;
+      return;
+    }
+
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now();
+    }
+
+    setChartData((prevData) => {
+      const currentTime = (Date.now() - startTimeRef.current!) / 1000;
+
+      const measure = {
+        time: Number(currentTime.toFixed(2)),
+        thumb: temperatureData[TEMPERATURE_THUMB_UUID]?.value || 0,
+        index: temperatureData['index']?.value || 0,
+        middle: temperatureData['middle']?.value || 0,
+        ring: temperatureData['ring']?.value || 0,
+        pinky: temperatureData['pinky']?.value || 0,
+      };
+
+      if (chartMode === ChartMode.LOGS) {
+        logs.current.push(
+          `Time: ${measure.time}s, T: ${measure.thumb}, I: ${measure.index}`
+        );
       }
 
-      setChartData((prevData) => {
-        const lastTime =
-          prevData.length > 0 ? prevData[prevData.length - 1].time : 0;
+      const newData = [...prevData, measure];
 
-        const isMoreThanALimit = prevData.length > 100;
+      if (newData.length > 100) {
+        return newData.slice(-100);
+      }
 
-        const measure = {
-          time: Number((lastTime + 0.02).toFixed(2)),
-          thumb: 20 + Math.random() * 50,
-          index: 20 + Math.random() * 50,
-          middle: 20 + Math.random() * 50,
-          ring: 20 + Math.random() * 50,
-          pinky: 20 + Math.random() * 50,
-        };
-
-        if (chartMode === ChartMode.LOGS) {
-          logs.current.push(
-            `Time: ${lastTime.toFixed(2)}s, Thumb: ${measure.thumb}, Index: ${measure.index}, Middle: ${measure.middle}, Ring: ${measure.ring}, Pinky: ${measure.pinky}`
-          );
-        }
-
-        if (isMoreThanALimit) {
-          return prevData.slice(1);
-        }
-
-        return [...prevData, measure];
-      });
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [chartMode, isRealTimeChartRunning]);
+      return newData;
+    });
+  }, [isRealTimeChartRunning, temperatureData, chartMode]);
 
   return (
     <>
@@ -129,8 +127,8 @@ const Temperature = () => {
       />
       <div className="overflow-auto px-6">
         <ul className="mb-4 flex w-full flex-wrap gap-4">
-          {mockedTemperature.map((sensor) => (
-            <li key={sensor.id} className="flex-1">
+          {Object.values(temperatureData).map((sensor) => (
+            <li key={sensor.name} className="flex-1">
               <Card
                 className={clsx({
                   'border-red-500': sensor.value > TEMPERATURE_LIMIT,
