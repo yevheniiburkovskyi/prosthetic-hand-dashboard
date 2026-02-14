@@ -10,20 +10,8 @@ interface Props extends React.HTMLAttributes<HTMLElement> {
 }
 
 const Header = ({ title, description, ...props }: Props) => {
-  const {
-    connectServer,
-    connectService,
-    subscribeForCharacteristic,
-    disconnectServer,
-    isBLEConnected,
-    isBLEConnecting,
-  } = useBLEContext();
-
-  const connectBluetooth = async () => {
-    await connectServer();
-    await connectService();
-    await subscribeForCharacteristic();
-  };
+  const { connectServer, disconnectServer, isBLEConnected, isBLEConnecting } =
+    useBLEContext();
 
   const BadgeComponent = useMemo(() => {
     switch (true) {
@@ -47,7 +35,7 @@ const Header = ({ title, description, ...props }: Props) => {
       <div className="flex items-center gap-4">
         {BadgeComponent}
         <Button
-          onClick={isBLEConnected ? disconnectServer : connectBluetooth}
+          onClick={isBLEConnected ? disconnectServer : connectServer}
           disabled={isBLEConnecting}
         >
           {!isBLEConnecting && (isBLEConnected ? <Unplug /> : <Bluetooth />)}
