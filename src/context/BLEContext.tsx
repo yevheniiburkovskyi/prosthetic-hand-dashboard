@@ -10,6 +10,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
+import { toast } from 'sonner';
 
 interface BLEContextType {
   server: BluetoothRemoteGATTServer | null;
@@ -62,7 +63,9 @@ const BLEProvider: React.FC<{
 
   const connectServer = useCallback(async () => {
     try {
+      toast.info('Start connecting to BLE device');
       setIsServerConnecting(true);
+
       const device = await navigator.bluetooth.requestDevice({
         filters: [{ name: 'Prosthetic-Hand' }],
         optionalServices: [SERVICE_UUID],
@@ -75,6 +78,7 @@ const BLEProvider: React.FC<{
       }
     } catch (error) {
       console.error('Connection error:', error);
+      toast.error('Failed to connect to BLE device.');
     } finally {
       setIsServerConnecting(false);
     }
@@ -89,6 +93,7 @@ const BLEProvider: React.FC<{
       setService(service);
     } catch (error) {
       console.error('Service error:', error);
+      toast.error('Failed to connect to BLE service.');
     } finally {
       setIsServiceConnecting(false);
     }
@@ -103,6 +108,7 @@ const BLEProvider: React.FC<{
       setService(null);
     } catch (error) {
       console.error('Disconnection error:', error);
+      toast.error('Failed to disconnect from BLE device.');
     }
   }, [server]);
 
@@ -136,6 +142,7 @@ const BLEProvider: React.FC<{
       );
     } catch (error) {
       console.error('Subscription error:', error);
+      toast.error('Failed to subscribe to BLE characteristic.');
     }
   }, [service]);
 
@@ -144,9 +151,16 @@ const BLEProvider: React.FC<{
 
   useEffect(() => {
     if (server && server.connected) {
+      toast.success(`Connected to BLE device: "${server.device.name}"`);
       setIsServerConnected(true);
     } else {
-      setIsServerConnected(false);
+      setIsServerConnected((prev) => {
+        if (prev) {
+          toast.error('Disconnected from BLE device.');
+        }
+
+        return false;
+      });
     }
   }, [server]);
 

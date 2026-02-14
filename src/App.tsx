@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { Toaster } from '@/components/ui/sonner';
 import NavigationMenu from './components/NavigationMenu';
 import Temperature from './pages/Temperature';
 import FSR from './pages/FSR';
@@ -17,6 +18,8 @@ const App = () => {
           <Route path="/heating" element={<div>Heating</div>} />
         </Routes>
       </section>
+
+      <Toaster />
     </main>
   );
 };
