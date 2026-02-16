@@ -7,7 +7,6 @@ import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
-import { ChartMode } from '@/types/chartType';
 import { TemperatureName } from '@/types/temperatureType';
 import { useBLEContext } from '@/context/BLEContext';
 import type { TemperatureChartData } from '@/types/temperatureType';
@@ -45,16 +44,14 @@ const Temperature = () => {
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
     useState<boolean>(true);
 
-  const [chartMode, setChartMode] = useState<ChartMode>(ChartMode.COMMON);
+  const [isLogging, setIsLogging] = useState<boolean>(true);
 
-  const toggleCommonChartMode = useCallback(() => {
-    setChartMode(ChartMode.COMMON);
+  const toggleChartRunning = useCallback(() => {
     setIsRealTimeChartRunning((prev) => !prev);
   }, []);
 
-  const toggleLogsChartMode = useCallback(() => {
-    setChartMode(ChartMode.LOGS);
-    setIsRealTimeChartRunning((prev) => !prev);
+  const toggleLogging = useCallback(() => {
+    setIsLogging((prev) => !prev);
   }, []);
 
   const startTimeRef = useRef<number | null>(null);
@@ -79,7 +76,7 @@ const Temperature = () => {
       pinky: temperatureData['pinky']?.value || 0,
     };
 
-    if (chartMode === ChartMode.LOGS) {
+    if (isLogging) {
       logs.current.push(
         `Time: ${measure.time.toFixed(2)}s, T: ${measure.thumb}`
       );
@@ -95,7 +92,7 @@ const Temperature = () => {
         );
       }
     }
-  }, [temperatureData, isRealTimeChartRunning, chartMode]);
+  }, [temperatureData, isRealTimeChartRunning, isLogging]);
 
   useEffect(() => {
     if (!isRealTimeChartRunning) {
@@ -164,9 +161,7 @@ const Temperature = () => {
           xAxisTickFormatter={xAxisTickFormatter}
           xAxisDomain={xAxisDomain}
           yAxisDomain={yAxisDomain}
-          chartMode={chartMode}
-          toggleCommonChartMode={toggleCommonChartMode}
-          toggleLogsChartMode={toggleLogsChartMode}
+          toggleChartRunning={toggleChartRunning}
           isRunning={isRealTimeChartRunning}
         />
       </div>

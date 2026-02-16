@@ -21,8 +21,7 @@ import { memo } from 'react';
 import type { CategoricalChartProps } from 'recharts/types/chart/generateCategoricalChart';
 import type { AxisDomain } from 'recharts/types/util/types';
 import { Button } from './ui/button';
-import { Pause, Play, Square } from 'lucide-react';
-import { ChartMode } from '@/types/chartType';
+import { Pause, Play } from 'lucide-react';
 
 interface ChartLineMultipleProps {
   data: CategoricalChartProps['data'];
@@ -37,10 +36,8 @@ interface ChartLineMultipleProps {
   yAxisTickFormatter?: YAxisProps['tickFormatter'];
   xAxisDomain?: AxisDomain;
   yAxisDomain?: AxisDomain;
-  toggleCommonChartMode?: () => void;
-  toggleLogsChartMode?: () => void;
+  toggleChartRunning?: () => void;
   isRunning?: boolean;
-  chartMode?: ChartMode;
 }
 
 const ChartLineMultiple = ({
@@ -56,14 +53,9 @@ const ChartLineMultiple = ({
   yAxisTickFormatter,
   xAxisDomain,
   yAxisDomain,
-  toggleCommonChartMode,
-  toggleLogsChartMode,
+  toggleChartRunning,
   isRunning,
-  chartMode = ChartMode.COMMON,
 }: ChartLineMultipleProps) => {
-  const isLogsModeRunning = isRunning && chartMode === ChartMode.LOGS;
-  const isCommonModeRunning = isRunning && chartMode === ChartMode.COMMON;
-
   return (
     <Card>
       <div className="mb-4 flex justify-between">
@@ -75,25 +67,10 @@ const ChartLineMultiple = ({
         </div>
         {
           <div className="flex gap-2">
-            {toggleLogsChartMode && (
-              <Button
-                onClick={toggleLogsChartMode}
-                disabled={isCommonModeRunning}
-              >
-                {isLogsModeRunning
-                  ? 'Stop logs collecting'
-                  : 'Run with logs collecting'}
-                {isLogsModeRunning ? <Square /> : <Play />}
-              </Button>
-            )}
-            {toggleCommonChartMode && (
-              <Button
-                onClick={toggleCommonChartMode}
-                className="max-w-min"
-                disabled={isLogsModeRunning}
-              >
-                {isCommonModeRunning ? 'Pause' : 'Run'}
-                {isCommonModeRunning ? <Pause /> : <Play />}
+            {toggleChartRunning && (
+              <Button onClick={toggleChartRunning} className="max-w-min">
+                {isRunning ? 'Pause' : 'Run'}
+                {isRunning ? <Pause /> : <Play />}
               </Button>
             )}
           </div>
