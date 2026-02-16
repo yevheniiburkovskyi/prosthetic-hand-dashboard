@@ -11,3 +11,12 @@ export enum TemperatureName {
   RING = 'Ring',
   PINKY = 'Pinky',
 }
+
+export interface TemperatureChartData {
+  time: number;
+  thumb: number;
+  index: number;
+  middle: number;
+  ring: number;
+  pinky: number;
+}

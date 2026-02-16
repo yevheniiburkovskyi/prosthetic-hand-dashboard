@@ -10,64 +10,42 @@ import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
 import { ChartMode } from '@/types/chartType';
 import { TemperatureName } from '@/types/temperatureType';
 import { useBLEContext } from '@/context/BLEContext';
+import type { TemperatureChartData } from '@/types/temperatureType';
 
 const chartConfig = {
-  thumb: {
-    label: TemperatureName.THUMB,
-    color: 'var(--chart-1)',
-  },
-  index: {
-    label: TemperatureName.INDEX,
-    color: 'var(--chart-2)',
-  },
-  middle: {
-    label: TemperatureName.MIDDLE,
-    color: 'var(--chart-3)',
-  },
-  ring: {
-    label: TemperatureName.RING,
-    color: 'var(--chart-4)',
-  },
-  pinky: {
-    label: TemperatureName.PINKY,
-    color: 'var(--chart-5)',
-  },
+  thumb: { label: TemperatureName.THUMB, color: 'var(--chart-1)' },
+  index: { label: TemperatureName.INDEX, color: 'var(--chart-2)' },
+  middle: { label: TemperatureName.MIDDLE, color: 'var(--chart-3)' },
+  ring: { label: TemperatureName.RING, color: 'var(--chart-4)' },
+  pinky: { label: TemperatureName.PINKY, color: 'var(--chart-5)' },
 } satisfies ChartConfig;
 
 const getTemperatureBadge = (value: number) => {
-  switch (true) {
-    case value > TEMPERATURE_LIMIT:
-      return <Badge variant="error" title="High" />;
-    default:
-      return <Badge variant="success" title="Normal" />;
-  }
+  return value > TEMPERATURE_LIMIT ? (
+    <Badge variant="error" title="High" />
+  ) : (
+    <Badge variant="success" title="Normal" />
+  );
 };
 
 const yAxisTickFormatter = (value: number) => `${value}°C`;
-const xAxisTickFormatter = (value: number) => `${value}s`;
+const xAxisTickFormatter = (value: number) => `${Math.round(value)}s`;
 
 const yAxisDomain = [0, 100];
+const X_AXIS_WINDOW_SIZE = 5;
 
 const Temperature = () => {
   const { temperatureData } = useBLEContext();
-
   const logs = useRef<string[]>([]);
+
+  const dataBufferRef = useRef<TemperatureChartData[]>([]);
+
+  const [chartData, setChartData] = useState<TemperatureChartData[]>([]);
 
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
     useState<boolean>(true);
 
   const [chartMode, setChartMode] = useState<ChartMode>(ChartMode.COMMON);
-
-  const [chartData, setChartData] = useState([
-    {
-      time: 0,
-      thumb: temperatureData[TEMPERATURE_THUMB_UUID].value,
-      index: temperatureData['index'].value,
-      middle: temperatureData['middle'].value,
-      ring: temperatureData['ring'].value,
-      pinky: temperatureData['pinky'].value,
-    },
-  ]);
 
   const toggleCommonChartMode = useCallback(() => {
     setChartMode(ChartMode.COMMON);
@@ -83,7 +61,6 @@ const Temperature = () => {
 
   useEffect(() => {
     if (!isRealTimeChartRunning) {
-      startTimeRef.current = null;
       return;
     }
 
@@ -91,33 +68,53 @@ const Temperature = () => {
       startTimeRef.current = Date.now();
     }
 
-    setChartData((prevData) => {
-      const currentTime = (Date.now() - startTimeRef.current!) / 1000;
+    const currentTime = (Date.now() - startTimeRef.current) / 1000;
 
-      const measure = {
-        time: Number(currentTime.toFixed(2)),
-        thumb: temperatureData[TEMPERATURE_THUMB_UUID]?.value || 0,
-        index: temperatureData['index']?.value || 0,
-        middle: temperatureData['middle']?.value || 0,
-        ring: temperatureData['ring']?.value || 0,
-        pinky: temperatureData['pinky']?.value || 0,
-      };
+    const measure: TemperatureChartData = {
+      time: currentTime,
+      thumb: temperatureData[TEMPERATURE_THUMB_UUID]?.value || 0,
+      index: temperatureData['index']?.value || 0,
+      middle: temperatureData['middle']?.value || 0,
+      ring: temperatureData['ring']?.value || 0,
+      pinky: temperatureData['pinky']?.value || 0,
+    };
 
-      if (chartMode === ChartMode.LOGS) {
-        logs.current.push(
-          `Time: ${measure.time}s, T: ${measure.thumb}, I: ${measure.index}`
+    if (chartMode === ChartMode.LOGS) {
+      logs.current.push(
+        `Time: ${measure.time.toFixed(2)}s, T: ${measure.thumb}`
+      );
+    }
+
+    dataBufferRef.current.push(measure);
+
+    if (dataBufferRef.current.length > 500) {
+      const cutOffTime = currentTime - 20;
+      if (dataBufferRef.current[0].time < cutOffTime) {
+        dataBufferRef.current = dataBufferRef.current.filter(
+          (p) => p.time > cutOffTime
         );
       }
+    }
+  }, [temperatureData, isRealTimeChartRunning, chartMode]);
 
-      const newData = [...prevData, measure];
+  useEffect(() => {
+    if (!isRealTimeChartRunning) {
+      return;
+    }
 
-      if (newData.length > 100) {
-        return newData.slice(-100);
-      }
+    const interval = setInterval(() => {
+      setChartData([...dataBufferRef.current]);
+    }, 20);
 
-      return newData;
-    });
-  }, [isRealTimeChartRunning, temperatureData, chartMode]);
+    return () => clearInterval(interval);
+  }, [isRealTimeChartRunning]);
+
+  const lastTime =
+    chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
+
+  const windowEnd = Math.max(X_AXIS_WINDOW_SIZE, lastTime);
+  const windowStart = windowEnd - X_AXIS_WINDOW_SIZE;
+  const xAxisDomain: [number, number] = [windowStart, windowEnd];
 
   return (
     <>
@@ -159,12 +156,13 @@ const Temperature = () => {
           data={chartData}
           config={chartConfig}
           title="Temperature sensors"
-          description="Real-time temperature data from all sensors"
+          description="Real-time temperature data"
           xAxisKey="time"
           xLabel="Time"
           yLabel="Temperature (°C)"
           yAxisTickFormatter={yAxisTickFormatter}
           xAxisTickFormatter={xAxisTickFormatter}
+          xAxisDomain={xAxisDomain}
           yAxisDomain={yAxisDomain}
           chartMode={chartMode}
           toggleCommonChartMode={toggleCommonChartMode}

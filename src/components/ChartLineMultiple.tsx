@@ -55,6 +55,7 @@ const ChartLineMultiple = ({
   yLabel,
   xAxisTickFormatter,
   yAxisTickFormatter,
+  xAxisDomain,
   yAxisDomain,
   toggleCommonChartMode,
   toggleLogsChartMode,
@@ -110,7 +111,9 @@ const ChartLineMultiple = ({
             tickFormatter={xAxisTickFormatter}
             label={{ value: xLabel, position: 'insideBottom', offset: -5 }}
             type="number"
-            domain={['dataMin', 'dataMax']}
+            domain={xAxisDomain || ['dataMin', 'dataMax']}
+            tickCount={6}
+            allowDataOverflow={true}
           />
           <YAxis
             dataKey={yAxisKey}
@@ -135,7 +138,6 @@ const ChartLineMultiple = ({
               stroke={item.color}
               strokeWidth={2}
               dot={false}
-              isAnimationActive={false}
             />
           ))}
         </LineChart>
