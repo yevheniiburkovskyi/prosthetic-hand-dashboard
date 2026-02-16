@@ -14,7 +14,6 @@ import {
 import {
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
 import Card from './ui/Card';
@@ -129,7 +128,7 @@ const ChartLineMultiple = ({
             domain={yAxisDomain}
           />
           <Legend verticalAlign="top" height={30} />
-          <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+          <ChartTooltip cursor={false} />
           {Object.entries(config).map(([key, item]) => (
             <Line
               key={key}
