@@ -10,6 +10,7 @@ import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
 import { TemperatureName } from '@/types/temperatureType';
 import { useBLEContext } from '@/context/BLEContext';
 import type { TemperatureChartData } from '@/types/temperatureType';
+import Logger from '@/components/Logger';
 
 const chartConfig = {
   thumb: { label: TemperatureName.THUMB, color: 'var(--chart-1)' },
@@ -35,7 +36,8 @@ const X_AXIS_WINDOW_SIZE = 5;
 
 const Temperature = () => {
   const { temperatureData } = useBLEContext();
-  const logs = useRef<string[]>([]);
+
+  const [logs, setLogs] = useState<TemperatureChartData[]>([]);
 
   const dataBufferRef = useRef<TemperatureChartData[]>([]);
 
@@ -44,7 +46,7 @@ const Temperature = () => {
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
     useState<boolean>(true);
 
-  const [isLogging, setIsLogging] = useState<boolean>(true);
+  const [isLogging, setIsLogging] = useState<boolean>(false);
 
   const toggleChartRunning = useCallback(() => {
     setIsRealTimeChartRunning((prev) => !prev);
@@ -77,9 +79,7 @@ const Temperature = () => {
     };
 
     if (isLogging) {
-      logs.current.push(
-        `Time: ${measure.time.toFixed(2)}s, T: ${measure.thumb}`
-      );
+      setLogs((prevLogs) => [...prevLogs, measure]);
     }
 
     dataBufferRef.current.push(measure);
@@ -119,8 +119,8 @@ const Temperature = () => {
         title="Temperature sensors"
         description="Temperature sensor control"
       />
-      <div className="overflow-auto px-6">
-        <ul className="mb-4 flex w-full flex-wrap gap-4">
+      <div className="flex flex-col gap-6 overflow-auto px-6 pb-6">
+        <ul className="flex w-full flex-wrap gap-4">
           {Object.values(temperatureData).map((sensor) => (
             <li key={sensor.name} className="flex-1">
               <Card
@@ -163,6 +163,14 @@ const Temperature = () => {
           yAxisDomain={yAxisDomain}
           toggleChartRunning={toggleChartRunning}
           isRunning={isRealTimeChartRunning}
+        />
+
+        <Logger
+          title="Logger"
+          description="Logging temperature data"
+          isLogging={isLogging}
+          toggleLogging={toggleLogging}
+          logs={logs}
         />
       </div>
     </>
