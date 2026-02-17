@@ -35,3 +35,15 @@ export const formatLogs = (logs: Record<string, number>[]): string => {
 
   return `${header}\n${rows}`;
 };
+
+export const formatTime = (totalSeconds: number): string => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+
+  const hh = hours.toString().padStart(2, '0');
+  const mm = minutes.toString().padStart(2, '0');
+  const ss = seconds.toString().padStart(2, '0');
+
+  return `${hh}:${mm}:${ss}`;
+};
