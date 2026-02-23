@@ -1,7 +1,14 @@
-import { memo, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import Card from './ui/Card';
 import { Button } from './ui/button';
-import { Download, Pause, Play } from 'lucide-react';
+import { ChartSpline, Download, Pause, Play } from 'lucide-react';
 import { downloadLogs, formatLogs, formatTime } from '@/lib/utils';
 
 type Data = Record<string, number>;
@@ -12,6 +19,7 @@ interface Props extends ComponentProps<'div'> {
   toggleLogging: () => void;
   isLogging: boolean;
   logs: Data[];
+  Chart: ReactNode;
 }
 
 const Logger = ({
@@ -20,9 +28,11 @@ const Logger = ({
   toggleLogging,
   isLogging,
   logs,
+  Chart,
   ...props
 }: Props) => {
   const [timer, setTimer] = useState<number>(0);
+  const [isChartShown, setIsChartShown] = useState(false);
 
   const formattedLogs = useMemo(
     () => (logs.length > 1 ? formatLogs(logs) : ''),
@@ -37,6 +47,10 @@ const Logger = ({
       .slice(0, 19);
 
     downloadLogs(formattedLogs, `prosthetic_logs_${timestamp}.csv`);
+  };
+
+  const drawChart = () => {
+    setIsChartShown(true);
   };
 
   useEffect(() => {
@@ -72,6 +86,14 @@ const Logger = ({
         </div>
         <div className="flex gap-2">
           <Button
+            onClick={drawChart}
+            variant="outline"
+            disabled={logs.length === 1 || isLogging}
+          >
+            <ChartSpline />
+            Draw Chart
+          </Button>
+          <Button
             onClick={handleDownload}
             variant="outline"
             disabled={logs.length === 1 || isLogging}
@@ -103,6 +125,8 @@ const Logger = ({
         <div className="my-2 h-[1px] w-full bg-neutral-300" />
         <pre className="h-64 overflow-auto">{data}</pre>
       </div>
+
+      {isChartShown && Chart}
     </Card>
   );
 };

@@ -35,7 +35,7 @@ const yAxisDomain = [0, 100];
 const X_AXIS_WINDOW_SIZE = 5;
 
 const Temperature = () => {
-  const { temperatureData } = useBLEContext();
+  const { temperatureData, isBLEConnected } = useBLEContext();
 
   const [logs, setLogs] = useState<TemperatureChartData[]>([]);
 
@@ -44,7 +44,7 @@ const Temperature = () => {
   const [chartData, setChartData] = useState<TemperatureChartData[]>([]);
 
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
-    useState<boolean>(true);
+    useState<boolean>(false);
 
   const [isLogging, setIsLogging] = useState<boolean>(false);
 
@@ -106,6 +106,14 @@ const Temperature = () => {
     return () => clearInterval(interval);
   }, [isRealTimeChartRunning]);
 
+  useEffect(() => {
+    if (isBLEConnected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsRealTimeChartRunning(true);
+      setIsLogging(true);
+    }
+  }, [isBLEConnected]);
+
   const lastTime =
     chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
 
@@ -155,7 +163,7 @@ const Temperature = () => {
           title="Temperature sensors"
           description="Real-time temperature data"
           xAxisKey="time"
-          xLabel="Time"
+          xLabel="Time (S)"
           yLabel="Temperature (°C)"
           yAxisTickFormatter={yAxisTickFormatter}
           xAxisTickFormatter={xAxisTickFormatter}
@@ -171,6 +179,19 @@ const Temperature = () => {
           isLogging={isLogging}
           toggleLogging={toggleLogging}
           logs={logs}
+          Chart={
+            <ChartLineMultiple
+              data={logs}
+              config={chartConfig}
+              title="Temperature logs chart"
+              xAxisKey="time"
+              xLabel="Time (S)"
+              yLabel="Temperature (°C)"
+              yAxisTickFormatter={yAxisTickFormatter}
+              xAxisTickFormatter={xAxisTickFormatter}
+              yAxisDomain={yAxisDomain}
+            />
+          }
         />
       </div>
     </>
