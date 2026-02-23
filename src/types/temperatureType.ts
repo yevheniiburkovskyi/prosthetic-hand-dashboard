@@ -4,7 +4,7 @@ export interface Temperature {
   value: number;
 }
 
-export enum TemperatureName {
+export enum FingerName {
   THUMB = 'Thumb',
   INDEX = 'Index',
   MIDDLE = 'Middle',

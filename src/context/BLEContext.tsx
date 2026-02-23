@@ -5,7 +5,7 @@ import {
   TEMPERATURE_THUMB_UUID,
 } from '@/lib/constants';
 import type { TemperatureBLEData } from '@/types/bleType';
-import { TemperatureName } from '@/types/temperatureType';
+import { FingerName } from '@/types/temperatureType';
 import React, {
   createContext,
   useCallback,
@@ -122,7 +122,7 @@ const BLEProvider: React.FC<{
           setTemperatureData((prev) => ({
             ...prev,
             [TEMPERATURE_THUMB_UUID]: {
-              name: TemperatureName.THUMB,
+              name: FingerName.THUMB,
               value: temp,
             },
           }));

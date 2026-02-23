@@ -7,17 +7,17 @@ import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
-import { TemperatureName } from '@/types/temperatureType';
+import { FingerName } from '@/types/temperatureType';
 import { useBLEContext } from '@/context/BLEContext';
 import type { TemperatureChartData } from '@/types/temperatureType';
 import Logger from '@/components/Logger';
 
 const chartConfig = {
-  thumb: { label: TemperatureName.THUMB, color: 'var(--chart-1)' },
-  index: { label: TemperatureName.INDEX, color: 'var(--chart-2)' },
-  middle: { label: TemperatureName.MIDDLE, color: 'var(--chart-3)' },
-  ring: { label: TemperatureName.RING, color: 'var(--chart-4)' },
-  pinky: { label: TemperatureName.PINKY, color: 'var(--chart-5)' },
+  thumb: { label: FingerName.THUMB, color: 'var(--chart-1)' },
+  index: { label: FingerName.INDEX, color: 'var(--chart-2)' },
+  middle: { label: FingerName.MIDDLE, color: 'var(--chart-3)' },
+  ring: { label: FingerName.RING, color: 'var(--chart-4)' },
+  pinky: { label: FingerName.PINKY, color: 'var(--chart-5)' },
 } satisfies ChartConfig;
 
 const getTemperatureBadge = (value: number) => {

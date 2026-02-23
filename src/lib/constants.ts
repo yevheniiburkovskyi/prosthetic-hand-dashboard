@@ -1,5 +1,5 @@
 import type { TemperatureBLEData } from '@/types/bleType';
-import { TemperatureName } from '@/types/temperatureType';
+import { FingerName } from '@/types/temperatureType';
 
 export const TEMPERATURE_LIMIT = 100;
 export const MAX_FSR_VALUE = 1000;
@@ -10,23 +10,23 @@ export const FSR_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
 export const INITIAL_TEMPERATURE_DATA: TemperatureBLEData = {
   [TEMPERATURE_THUMB_UUID]: {
-    name: TemperatureName.THUMB,
+    name: FingerName.THUMB,
     value: 0,
   },
   index: {
-    name: TemperatureName.INDEX,
+    name: FingerName.INDEX,
     value: 0,
   },
   middle: {
-    name: TemperatureName.MIDDLE,
+    name: FingerName.MIDDLE,
     value: 0,
   },
   ring: {
-    name: TemperatureName.RING,
+    name: FingerName.RING,
     value: 0,
   },
   pinky: {
-    name: TemperatureName.PINKY,
+    name: FingerName.PINKY,
     value: 0,
   },
 };
