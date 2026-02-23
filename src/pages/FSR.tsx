@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { chartData, mockedFSR } from '@/mocks/fsrMocks';
 import { Progress } from '@/components/ui/progress';
 import { MAX_FSR_VALUE } from '@/lib/constants';
+import { useBLEContext } from '@/context/BLEContext';
 
 const chartConfig = {
   thumb: {
@@ -33,6 +34,9 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 const FSR = () => {
+  const { fsrData } = useBLEContext();
+
+  console.log(fsrData);
   return (
     <>
       <Header title="FSR sensors" description="FSR sensor control" />

@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  INITIAL_TEMPERATURE_DATA,
+  FSR_CHARACTERISTIC_UUID,
+  INITIAL_SENSOR_DATA,
   SERVICE_UUID,
   TEMPERATURE_THUMB_UUID,
 } from '@/lib/constants';
-import type { TemperatureBLEData } from '@/types/bleType';
+import type { SensorBLEData } from '@/types/bleType';
 import { FingerName } from '@/types/temperatureType';
 import React, {
   createContext,
@@ -19,13 +20,13 @@ import { toast } from 'sonner';
 interface BLEContextType {
   server: BluetoothRemoteGATTServer | null;
   service: BluetoothRemoteGATTService | null;
-  temperatureData: TemperatureBLEData;
+  temperatureData: SensorBLEData;
+  fsrData: SensorBLEData;
   isBLEConnecting: boolean;
   isBLEConnected: boolean;
   connectService: () => Promise<void>;
   disconnectServer: () => Promise<void>;
   connectServer: () => Promise<void>;
-  subscribeForCharacteristic: () => Promise<void>;
 }
 
 const BLEContext = createContext<BLEContextType | undefined>(undefined);
@@ -33,9 +34,9 @@ const BLEContext = createContext<BLEContextType | undefined>(undefined);
 const BLEProvider: React.FC<{
   children: ReactNode;
 }> = ({ children }) => {
-  const [temperatureData, setTemperatureData] = useState<TemperatureBLEData>(
-    INITIAL_TEMPERATURE_DATA
-  );
+  const [temperatureData, setTemperatureData] =
+    useState<SensorBLEData>(INITIAL_SENSOR_DATA);
+  const [fsrData, setFsrData] = useState<SensorBLEData>(INITIAL_SENSOR_DATA);
 
   const [server, setServer] = useState<BluetoothRemoteGATTServer | null>(null);
   const [service, setService] = useState<BluetoothRemoteGATTService | null>(
@@ -97,42 +98,31 @@ const BLEProvider: React.FC<{
     }
   }, [server]);
 
-  const subscribeForCharacteristic = useCallback(async () => {
-    if (!service) {
-      return;
-    }
+  const subscribeForCharacteristic = useCallback(
+    async (characteristicUUID: string, onReceive: (value: string) => void) => {
+      if (!service) {
+        return;
+      }
 
-    try {
-      const temperatureChar = await service.getCharacteristic(
-        TEMPERATURE_THUMB_UUID
-      );
+      try {
+        const sensorChar = await service.getCharacteristic(characteristicUUID);
 
-      await temperatureChar.startNotifications();
+        await sensorChar.startNotifications();
 
-      temperatureChar.addEventListener(
-        'characteristicvaluechanged',
-        (event) => {
+        sensorChar.addEventListener('characteristicvaluechanged', (event) => {
           const target = event.target as BluetoothRemoteGATTCharacteristic;
           const value = target.value;
           const decoder = new TextDecoder('utf-8');
-          const tempString = decoder.decode(value!);
-          const temp = parseFloat(tempString);
-          console.log('Received temperature:', temp);
-
-          setTemperatureData((prev) => ({
-            ...prev,
-            [TEMPERATURE_THUMB_UUID]: {
-              name: FingerName.THUMB,
-              value: temp,
-            },
-          }));
-        }
-      );
-    } catch (error) {
-      console.error('Subscription error:', error);
-      toast.error(`Failed to subscribe to BLE characteristic: ${error}`);
-    }
-  }, [service]);
+          const sensorString = decoder.decode(value!);
+          onReceive(sensorString);
+        });
+      } catch (error) {
+        console.error('Subscription error:', error);
+        toast.error(`Failed to subscribe to BLE characteristic: ${error}`);
+      }
+    },
+    [service]
+  );
 
   const isBLEConnecting = isServerConnecting || isServiceConnecting;
   const isBLEConnected = isServerConnected;
@@ -143,10 +133,28 @@ const BLEProvider: React.FC<{
 
       connectService().then(() => {
         toast.success(`Connected to BLE device: "${server.device.name}"`);
-        subscribeForCharacteristic();
+        subscribeForCharacteristic(TEMPERATURE_THUMB_UUID, (value) => {
+          setTemperatureData((prev) => ({
+            ...prev,
+            [TEMPERATURE_THUMB_UUID]: {
+              name: FingerName.THUMB,
+              value: parseFloat(value),
+            },
+          }));
+        });
+        subscribeForCharacteristic(FSR_CHARACTERISTIC_UUID, (value) => {
+          console.log('Received FSR value:', value);
+          setFsrData((prev) => ({
+            ...prev,
+            [FSR_CHARACTERISTIC_UUID]: {
+              name: FingerName.INDEX,
+              value: parseInt(value, 10),
+            },
+          }));
+        });
       });
     } else {
-      setTemperatureData(INITIAL_TEMPERATURE_DATA);
+      setTemperatureData(INITIAL_SENSOR_DATA);
       setIsServerConnected((prev) => {
         if (prev) {
           toast.error('Disconnected from BLE device.');
@@ -161,12 +169,12 @@ const BLEProvider: React.FC<{
     isBLEConnected,
     isBLEConnecting,
     temperatureData,
+    fsrData,
     server,
     service,
     connectServer,
     connectService,
     disconnectServer,
-    subscribeForCharacteristic,
   };
 
   return <BLEContext.Provider value={value}>{children}</BLEContext.Provider>;

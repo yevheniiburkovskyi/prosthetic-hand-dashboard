@@ -1,4 +1,4 @@
-import type { TemperatureBLEData } from '@/types/bleType';
+import type { SensorBLEData } from '@/types/bleType';
 import { FingerName } from '@/types/temperatureType';
 
 export const TEMPERATURE_LIMIT = 100;
@@ -8,7 +8,7 @@ export const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 export const TEMPERATURE_THUMB_UUID = '1c95d5d3-d300-4172-bc4a-bf2436f6d532';
 export const FSR_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
-export const INITIAL_TEMPERATURE_DATA: TemperatureBLEData = {
+export const INITIAL_SENSOR_DATA: SensorBLEData = {
   [TEMPERATURE_THUMB_UUID]: {
     name: FingerName.THUMB,
     value: 0,

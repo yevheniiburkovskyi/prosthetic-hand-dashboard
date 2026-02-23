@@ -1,6 +1,6 @@
-export interface TemperatureUnitBLEData {
+export interface SensorUnitBLEData {
   name: string;
   value: number;
 }
 
-export type TemperatureBLEData = Record<string, TemperatureUnitBLEData>;
+export type SensorBLEData = Record<string, SensorUnitBLEData>;
