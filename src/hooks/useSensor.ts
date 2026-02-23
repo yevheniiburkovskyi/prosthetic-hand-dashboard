@@ -16,7 +16,6 @@ const useSensor = <TChartData extends { time: number }>({
   const { isBLEConnected } = useBLEContext();
 
   const [logs, setLogs] = useState<TChartData[]>([]);
-  const dataBufferRef = useRef<TChartData[]>([]);
   const [chartData, setChartData] = useState<TChartData[]>([]);
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
@@ -30,6 +29,7 @@ const useSensor = <TChartData extends { time: number }>({
     setIsLogging((prev) => !prev);
   }, []);
 
+  // Collect data into buffer on every sensor change (cheap, no re-render)
   useEffect(() => {
     if (!isRealTimeChartRunning) {
       return;
@@ -46,29 +46,8 @@ const useSensor = <TChartData extends { time: number }>({
       setLogs((prevLogs) => [...prevLogs, measure]);
     }
 
-    dataBufferRef.current.push(measure);
-
-    if (dataBufferRef.current.length > 500) {
-      const cutOffTime = currentTime - 20;
-      if (dataBufferRef.current[0].time < cutOffTime) {
-        dataBufferRef.current = dataBufferRef.current.filter(
-          (p) => p.time > cutOffTime
-        );
-      }
-    }
+    setChartData((prevChartData) => [...prevChartData, measure]);
   }, [sensorData, isRealTimeChartRunning, isLogging, createMeasure]);
-
-  useEffect(() => {
-    if (!isRealTimeChartRunning) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setChartData([...dataBufferRef.current]);
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [isRealTimeChartRunning]);
 
   useEffect(() => {
     if (isBLEConnected) {
