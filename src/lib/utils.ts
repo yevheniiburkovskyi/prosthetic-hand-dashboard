@@ -25,7 +25,7 @@ export const downloadLogs = (data: string, filename: string = 'logs.csv') => {
   URL.revokeObjectURL(url);
 };
 
-export const formatLogs = (logs: Record<string, number>[]): string => {
+export const formatLogs = (logs: Record<string, number | string>[]): string => {
   if (logs.length === 0) {
     return '';
   }

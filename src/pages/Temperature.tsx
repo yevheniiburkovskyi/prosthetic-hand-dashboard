@@ -5,12 +5,13 @@ import Card from '@/components/ui/Card';
 import type { ChartConfig } from '@/components/ui/chart';
 import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo } from 'react';
 import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
-import { FingerName } from '@/types/temperatureType';
 import { useBLEContext } from '@/context/BLEContext';
-import type { TemperatureChartData } from '@/types/temperatureType';
+import type { SensorBLEData } from '@/types/bleType';
 import Logger from '@/components/Logger';
+import { useSensor } from '@/hooks/useSensor';
+import { FingerName, type SensorChartData } from '@/types/sensorType';
 
 const chartConfig = {
   thumb: { label: FingerName.THUMB, color: 'var(--chart-1)' },
@@ -32,94 +33,34 @@ const yAxisTickFormatter = (value: number) => `${value}°C`;
 const xAxisTickFormatter = (value: number) => `${Math.round(value)}s`;
 
 const yAxisDomain = [0, 100];
-const X_AXIS_WINDOW_SIZE = 5;
+
+const createTemperatureMeasure = (
+  sensorData: SensorBLEData,
+  currentTime: number
+): SensorChartData => ({
+  time: currentTime,
+  thumb: sensorData[TEMPERATURE_THUMB_UUID]?.value || 0,
+  index: sensorData['index']?.value || 0,
+  middle: sensorData['middle']?.value || 0,
+  ring: sensorData['ring']?.value || 0,
+  pinky: sensorData['pinky']?.value || 0,
+});
 
 const Temperature = () => {
-  const { temperatureData, isBLEConnected } = useBLEContext();
+  const { temperatureData } = useBLEContext();
 
-  const [logs, setLogs] = useState<TemperatureChartData[]>([]);
-
-  const dataBufferRef = useRef<TemperatureChartData[]>([]);
-
-  const [chartData, setChartData] = useState<TemperatureChartData[]>([]);
-
-  const [isRealTimeChartRunning, setIsRealTimeChartRunning] =
-    useState<boolean>(false);
-
-  const [isLogging, setIsLogging] = useState<boolean>(false);
-
-  const toggleChartRunning = useCallback(() => {
-    setIsRealTimeChartRunning((prev) => !prev);
-  }, []);
-
-  const toggleLogging = useCallback(() => {
-    setIsLogging((prev) => !prev);
-  }, []);
-
-  const startTimeRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isRealTimeChartRunning) {
-      return;
-    }
-
-    if (startTimeRef.current === null) {
-      startTimeRef.current = Date.now();
-    }
-
-    const currentTime = (Date.now() - startTimeRef.current) / 1000;
-
-    const measure: TemperatureChartData = {
-      time: currentTime,
-      thumb: temperatureData[TEMPERATURE_THUMB_UUID]?.value || 0,
-      index: temperatureData['index']?.value || 0,
-      middle: temperatureData['middle']?.value || 0,
-      ring: temperatureData['ring']?.value || 0,
-      pinky: temperatureData['pinky']?.value || 0,
-    };
-
-    if (isLogging) {
-      setLogs((prevLogs) => [...prevLogs, measure]);
-    }
-
-    dataBufferRef.current.push(measure);
-
-    if (dataBufferRef.current.length > 500) {
-      const cutOffTime = currentTime - 20;
-      if (dataBufferRef.current[0].time < cutOffTime) {
-        dataBufferRef.current = dataBufferRef.current.filter(
-          (p) => p.time > cutOffTime
-        );
-      }
-    }
-  }, [temperatureData, isRealTimeChartRunning, isLogging]);
-
-  useEffect(() => {
-    if (!isRealTimeChartRunning) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setChartData([...dataBufferRef.current]);
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [isRealTimeChartRunning]);
-
-  useEffect(() => {
-    if (isBLEConnected) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsRealTimeChartRunning(true);
-      setIsLogging(true);
-    }
-  }, [isBLEConnected]);
-
-  const lastTime =
-    chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
-
-  const windowEnd = Math.max(X_AXIS_WINDOW_SIZE, lastTime);
-  const windowStart = windowEnd - X_AXIS_WINDOW_SIZE;
-  const xAxisDomain: [number, number] = [windowStart, windowEnd];
+  const {
+    chartData,
+    logs,
+    isRealTimeChartRunning,
+    isLogging,
+    toggleChartRunning,
+    toggleLogging,
+    xAxisDomain,
+  } = useSensor<SensorChartData>({
+    sensorData: temperatureData,
+    createMeasure: createTemperatureMeasure,
+  });
 
   return (
     <>

@@ -1,9 +1,3 @@
-export interface Temperature {
-  id: number;
-  name: string;
-  value: number;
-}
-
 export enum FingerName {
   THUMB = 'Thumb',
   INDEX = 'Index',
@@ -12,7 +6,14 @@ export enum FingerName {
   PINKY = 'Pinky',
 }
 
-export interface TemperatureChartData {
+export interface Sensor {
+  id: number;
+  name: string;
+  value: number;
+}
+
+export interface SensorChartData {
+  [key: string]: number;
   time: number;
   thumb: number;
   index: number;

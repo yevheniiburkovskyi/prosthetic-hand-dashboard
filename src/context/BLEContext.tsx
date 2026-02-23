@@ -6,7 +6,7 @@ import {
   TEMPERATURE_THUMB_UUID,
 } from '@/lib/constants';
 import type { SensorBLEData } from '@/types/bleType';
-import { FingerName } from '@/types/temperatureType';
+import { FingerName } from '@/types/sensorType';
 import React, {
   createContext,
   useCallback,

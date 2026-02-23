@@ -11,7 +11,7 @@ import { Button } from './ui/button';
 import { ChartSpline, Download, Pause, Play } from 'lucide-react';
 import { downloadLogs, formatLogs, formatTime } from '@/lib/utils';
 
-type Data = Record<string, number>;
+type Data = Record<string, number | string>;
 
 interface Props extends ComponentProps<'div'> {
   title?: string;
