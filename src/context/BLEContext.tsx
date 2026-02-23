@@ -136,7 +136,7 @@ const BLEProvider: React.FC<{
         subscribeForCharacteristic(TEMPERATURE_THUMB_UUID, (value) => {
           setTemperatureData((prev) => ({
             ...prev,
-            [TEMPERATURE_THUMB_UUID]: {
+            index: {
               name: FingerName.THUMB,
               value: parseFloat(value),
             },
@@ -146,7 +146,7 @@ const BLEProvider: React.FC<{
           console.log('Received FSR value:', value);
           setFsrData((prev) => ({
             ...prev,
-            [FSR_CHARACTERISTIC_UUID]: {
+            index: {
               name: FingerName.INDEX,
               value: parseInt(value, 10),
             },
