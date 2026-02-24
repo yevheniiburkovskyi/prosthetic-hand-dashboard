@@ -15,7 +15,7 @@ const NavigationMenu = () => {
     <aside className="h-screen min-w-[250px] border-r border-neutral-200 bg-neutral-50 py-4">
       <Link className="mb-4 flex items-center gap-2 px-4" to="/">
         <Activity />
-        <h3 className="text-xl font-semibold">Sensor System</h3>
+        <h3 className="text-xl font-semibold">Prosthetic System</h3>
       </Link>
       <div className="h-[1px] w-full bg-neutral-200" />
       <nav className="flex flex-col gap-1 px-2 py-4">
