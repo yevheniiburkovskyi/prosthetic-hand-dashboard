@@ -49,7 +49,7 @@ const BLEProvider: React.FC<{
 
   const connectServer = useCallback(async () => {
     try {
-      toast.info('Start connecting to BLE device');
+      toast.info('Start searching for BLE device');
       setIsServerConnecting(true);
 
       const device = await navigator.bluetooth.requestDevice({
