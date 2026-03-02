@@ -1,12 +1,12 @@
 import { useBLEContext } from '@/context/BLEContext';
 import type { SensorBLEData } from '@/types/bleType';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const X_AXIS_WINDOW_SIZE = 5;
 
 interface UseSensorOptions<TChartData extends { time: number }> {
   sensorData: SensorBLEData;
-  createMeasure: (sensorData: SensorBLEData, currentTime: number) => TChartData;
+  createMeasure: (sensorData: SensorBLEData) => TChartData;
 }
 
 const useSensor = <TChartData extends { time: number }>({
@@ -19,7 +19,6 @@ const useSensor = <TChartData extends { time: number }>({
   const [chartData, setChartData] = useState<TChartData[]>([]);
   const [isRealTimeChartRunning, setIsRealTimeChartRunning] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
-  const startTimeRef = useRef<number | null>(null);
 
   const toggleChartRunning = useCallback(() => {
     setIsRealTimeChartRunning((prev) => !prev);
@@ -35,12 +34,7 @@ const useSensor = <TChartData extends { time: number }>({
       return;
     }
 
-    if (startTimeRef.current === null) {
-      startTimeRef.current = Date.now();
-    }
-
-    const currentTime = (Date.now() - startTimeRef.current) / 1000;
-    const measure = createMeasure(sensorData, currentTime);
+    const measure = createMeasure(sensorData);
 
     if (isLogging) {
       setLogs((prevLogs) => [...prevLogs, measure]);

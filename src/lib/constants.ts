@@ -12,21 +12,26 @@ export const INITIAL_SENSOR_DATA: SensorBLEData = {
   thumb: {
     name: FingerName.THUMB,
     value: 0,
+    timestamp: 0,
   },
   index: {
     name: FingerName.INDEX,
     value: 0,
+    timestamp: 0,
   },
   middle: {
     name: FingerName.MIDDLE,
     value: 0,
+    timestamp: 0,
   },
   ring: {
     name: FingerName.RING,
     value: 0,
+    timestamp: 0,
   },
   pinky: {
     name: FingerName.PINKY,
     value: 0,
+    timestamp: 0,
   },
 };

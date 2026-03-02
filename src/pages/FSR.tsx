@@ -5,7 +5,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import { Gauge } from 'lucide-react';
 import { memo } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { MAX_FSR_VALUE, FSR_CHARACTERISTIC_UUID } from '@/lib/constants';
+import { MAX_FSR_VALUE } from '@/lib/constants';
 import { useBLEContext } from '@/context/BLEContext';
 import type { SensorBLEData } from '@/types/bleType';
 import Logger from '@/components/Logger';
@@ -25,12 +25,9 @@ const xAxisTickFormatter = (value: number) => `${Math.round(value)}s`;
 
 const yAxisDomain = [0, MAX_FSR_VALUE];
 
-const createFSRMeasure = (
-  sensorData: SensorBLEData,
-  currentTime: number
-): SensorChartData => ({
-  time: currentTime,
-  thumb: sensorData[FSR_CHARACTERISTIC_UUID]?.value || 0,
+const createFSRMeasure = (sensorData: SensorBLEData): SensorChartData => ({
+  time: (sensorData['thumb']?.timestamp || 0) / 1000,
+  thumb: sensorData['thumb']?.value || 0,
   index: sensorData['index']?.value || 0,
   middle: sensorData['middle']?.value || 0,
   ring: sensorData['ring']?.value || 0,

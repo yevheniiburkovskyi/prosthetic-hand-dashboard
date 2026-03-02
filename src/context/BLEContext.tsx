@@ -99,7 +99,7 @@ const BLEProvider: React.FC<{
   }, [server]);
 
   const subscribeForCharacteristic = useCallback(
-    async (characteristicUUID: string, onReceive: (value: string) => void) => {
+    async (characteristicUUID: string, onReceive: (data: DataView) => void) => {
       if (!service) {
         return;
       }
@@ -111,10 +111,9 @@ const BLEProvider: React.FC<{
 
         sensorChar.addEventListener('characteristicvaluechanged', (event) => {
           const target = event.target as BluetoothRemoteGATTCharacteristic;
-          const value = target.value;
-          const decoder = new TextDecoder('utf-8');
-          const sensorString = decoder.decode(value!);
-          onReceive(sensorString);
+          if (target.value) {
+            onReceive(target.value);
+          }
         });
       } catch (error) {
         console.error('Subscription error:', error);
@@ -133,22 +132,27 @@ const BLEProvider: React.FC<{
 
       connectService().then(() => {
         toast.success(`Connected to BLE device: "${server.device.name}"`);
-        subscribeForCharacteristic(TEMPERATURE_THUMB_UUID, (value) => {
+        subscribeForCharacteristic(TEMPERATURE_THUMB_UUID, (data) => {
+          const timestamp = data.getUint32(0, true);
+          const tempValue = data.getFloat32(4, true);
           setTemperatureData((prev) => ({
             ...prev,
-            index: {
+            thumb: {
               name: FingerName.THUMB,
-              value: parseFloat(value),
+              value: parseFloat(tempValue.toFixed(1)),
+              timestamp,
             },
           }));
         });
-        subscribeForCharacteristic(FSR_CHARACTERISTIC_UUID, (value) => {
-          console.log('Received FSR value:', value);
+        subscribeForCharacteristic(FSR_CHARACTERISTIC_UUID, (data) => {
+          const timestamp = data.getUint32(0, true);
+          const forceValue = data.getUint16(4, true);
           setFsrData((prev) => ({
             ...prev,
-            index: {
-              name: FingerName.INDEX,
-              value: parseInt(value, 10),
+            thumb: {
+              name: FingerName.THUMB,
+              value: forceValue,
+              timestamp,
             },
           }));
         });

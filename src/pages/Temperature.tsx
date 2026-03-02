@@ -6,7 +6,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import clsx from 'clsx';
 import { Thermometer } from 'lucide-react';
 import { memo } from 'react';
-import { TEMPERATURE_LIMIT, TEMPERATURE_THUMB_UUID } from '@/lib/constants';
+import { TEMPERATURE_LIMIT } from '@/lib/constants';
 import { useBLEContext } from '@/context/BLEContext';
 import type { SensorBLEData } from '@/types/bleType';
 import Logger from '@/components/Logger';
@@ -35,11 +35,10 @@ const xAxisTickFormatter = (value: number) => `${Math.round(value)}s`;
 const yAxisDomain = [0, 100];
 
 const createTemperatureMeasure = (
-  sensorData: SensorBLEData,
-  currentTime: number
+  sensorData: SensorBLEData
 ): SensorChartData => ({
-  time: currentTime,
-  thumb: sensorData[TEMPERATURE_THUMB_UUID]?.value || 0,
+  time: (sensorData['thumb']?.timestamp || 0) / 1000,
+  thumb: sensorData['thumb']?.value || 0,
   index: sensorData['index']?.value || 0,
   middle: sensorData['middle']?.value || 0,
   ring: sensorData['ring']?.value || 0,
@@ -70,8 +69,8 @@ const Temperature = () => {
       />
       <div className="flex flex-col gap-6 overflow-auto px-6 pb-6">
         <ul className="flex w-full flex-wrap gap-4">
-          {Object.values(temperatureData).map((sensor) => (
-            <li key={sensor.name} className="flex-1">
+          {Object.values(temperatureData).map((sensor, index) => (
+            <li key={`${sensor.name}-${index}`} className="flex-1">
               <Card
                 className={clsx({
                   'border-red-500': sensor.value > TEMPERATURE_LIMIT,
