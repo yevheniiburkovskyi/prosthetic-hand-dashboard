@@ -3,9 +3,11 @@ import ChartLineMultiple from './ChartLineMultiple';
 import Logger from './Logger';
 import type { ChartConfig } from './ui/chart';
 import { useBLEContext } from '@/context/BLEContext';
-import { useSensor } from '@/hooks/useSensor';
+import type { ComponentProps } from 'react';
+import { useScrollingWindow } from '@/hooks/useScrollingWindow';
+import { CHART_WINDOW_SECONDS, useSensor } from '@/hooks/useSensor';
 import { FINGER_LABELS } from '@/lib/constants';
-import type { SensorKind } from '@/types/sensorType';
+import type { SensorKind, SensorSample } from '@/types/sensorType';
 
 const chartConfig = {
   thumb: { label: FINGER_LABELS.thumb, color: 'var(--chart-1)' },
@@ -40,6 +42,27 @@ const SensorCharts = (props: Props) => {
   );
 };
 
+/**
+ * Owns the per-frame scrolling so only this chart re-renders at display
+ * refresh rate, not the logger or the rest of the page.
+ */
+const RealtimeChart = (
+  props: Omit<
+    ComponentProps<typeof ChartLineMultiple>,
+    'xAxisDomain' | 'data'
+  > & {
+    data: SensorSample[];
+  }
+) => {
+  const xAxisDomain = useScrollingWindow(
+    props.data.at(-1)?.time,
+    CHART_WINDOW_SECONDS,
+    !!props.isRunning
+  );
+
+  return <ChartLineMultiple {...props} xAxisDomain={xAxisDomain} />;
+};
+
 const SensorChartsContent = ({
   kind,
   title,
@@ -55,7 +78,6 @@ const SensorChartsContent = ({
     isLogging,
     toggleChartRunning,
     toggleLogging,
-    xAxisDomain,
   } = useSensor(kind);
 
   const sharedChartProps = {
@@ -70,12 +92,11 @@ const SensorChartsContent = ({
 
   return (
     <>
-      <ChartLineMultiple
+      <RealtimeChart
         {...sharedChartProps}
         data={chartData}
         title={title}
         description={`Real-time ${dataLabel} data`}
-        xAxisDomain={xAxisDomain}
         toggleChartRunning={toggleChartRunning}
         isRunning={isChartRunning}
       />

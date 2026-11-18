@@ -60,13 +60,6 @@ const useSensor = (kind: SensorKind) => {
     });
   }, [kind, subscribe, isChartRunning, isLogging]);
 
-  const lastTime = chartData.at(-1)?.time ?? 0;
-  const windowEnd = Math.max(CHART_WINDOW_SECONDS, lastTime);
-  const xAxisDomain: [number, number] = [
-    windowEnd - CHART_WINDOW_SECONDS,
-    windowEnd,
-  ];
-
   return {
     chartData,
     logs,
@@ -74,8 +67,7 @@ const useSensor = (kind: SensorKind) => {
     isLogging,
     toggleChartRunning,
     toggleLogging,
-    xAxisDomain,
   };
 };
 
-export { useSensor };
+export { useSensor, CHART_WINDOW_SECONDS };
