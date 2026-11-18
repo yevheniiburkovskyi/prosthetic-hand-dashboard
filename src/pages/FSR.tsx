@@ -1,4 +1,5 @@
 import { Gauge } from 'lucide-react';
+import FsrOverview from '@/components/FsrOverview';
 import Header from '@/components/Header';
 import SensorCharts from '@/components/SensorCharts';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,8 @@ const FSR = () => {
     <>
       <Header title="FSR sensors" description="FSR sensor control" />
       <div className="flex flex-col gap-6 overflow-auto px-6 pb-6">
+        <FsrOverview />
+
         <ul className="flex w-full flex-wrap gap-4">
           {FINGERS.map((finger) => {
             const { value } = readings.fsr[finger];

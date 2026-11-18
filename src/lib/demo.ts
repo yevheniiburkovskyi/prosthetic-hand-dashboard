@@ -1,12 +1,26 @@
 import { FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
-import { fsrProfile } from '@/mocks/fsrMocks';
-import { temperatureProfile } from '@/mocks/temperatureMocks';
+import { FSR_REST_OFFSETS, fsrProfiles } from '@/mocks/fsrMocks';
+import { temperatureProfiles } from '@/mocks/temperatureMocks';
 import type { Finger, HandReadings, SensorKind } from '@/types/sensorType';
 
 /** How often demo mode emits a reading (≈ a real device notification rate). */
 export const DEMO_INTERVAL_MS = 100;
 
-/** Each finger oscillates around its own level so cards show varied values. */
+/** 'normal' = realistic values; 'states' = full range to show every level. */
+export type DemoScenario = 'normal' | 'states';
+
+export interface DemoSettings {
+  scenario: DemoScenario;
+  /** Add random jitter and FSR resting offset, like real sensors. */
+  noise: boolean;
+}
+
+export const DEFAULT_DEMO_SETTINGS: DemoSettings = {
+  scenario: 'normal',
+  noise: false,
+};
+
+/** Each finger oscillates around its own level. */
 export interface FingerWave {
   /** Typical value for this finger. */
   center: number;
@@ -21,28 +35,35 @@ export interface FingerWave {
 export type DemoProfile = Record<Finger, FingerWave>;
 
 interface DemoSource {
-  profile: DemoProfile;
+  profiles: Record<DemoScenario, DemoProfile>;
   decimals: number;
   min: number;
   max: number;
-  /** Small fast tremor on top of the slow wave. */
+  /** Smooth fast wobble (e.g. muscle tremor) on top of the slow wave. */
   tremor: number;
+  /** Random per-sample noise amplitude (±) when noise is on. */
+  noise: number;
+  /** Unloaded sensor reading added when noise is on. */
+  restOffsets?: Record<Finger, number>;
 }
 
 const DEMO_SOURCES: Record<SensorKind, DemoSource> = {
   temperature: {
-    profile: temperatureProfile,
+    profiles: temperatureProfiles,
     decimals: 1,
     min: 0,
     max: 100,
-    tremor: 0.4,
+    tremor: 0,
+    noise: 0.3,
   },
   fsr: {
-    profile: fsrProfile,
+    profiles: fsrProfiles,
     decimals: 0,
     min: 0,
     max: MAX_FSR_VALUE,
-    tremor: 25,
+    tremor: 15,
+    noise: 12,
+    restOffsets: FSR_REST_OFFSETS,
   },
 };
 
@@ -62,21 +83,38 @@ const round = (value: number, decimals: number) => {
   return Math.round(value * factor) / factor;
 };
 
+/**
+ * @param resting simulate an unloaded hand (FSR reads only offset + noise),
+ *   used while calibrating in demo mode.
+ */
 export const getDemoReadings = (
   kind: SensorKind,
-  elapsedMs: number
+  elapsedMs: number,
+  { scenario, noise }: DemoSettings,
+  { resting = false }: { resting?: boolean } = {}
 ): HandReadings => {
   const source = DEMO_SOURCES[kind];
+  const profile = source.profiles[scenario];
   const t = elapsedMs / 1000;
   const timestamp = Math.round(elapsedMs);
 
   return Object.fromEntries(
     FINGERS.map((finger, i) => {
-      const fingerWave = source.profile[finger];
-      const value =
-        fingerWave.center +
-        fingerWave.swing * wave(t, fingerWave) +
-        source.tremor * tremor(t, i * 1.7);
+      const fingerWave = profile[finger];
+      const signal =
+        resting && kind === 'fsr'
+          ? 0
+          : Math.max(
+              0,
+              fingerWave.center +
+                fingerWave.swing * wave(t, fingerWave) +
+                source.tremor * tremor(t, i * 1.7)
+            );
+      const sensorError = noise
+        ? (source.restOffsets?.[finger] ?? 0) +
+          (Math.random() * 2 - 1) * source.noise
+        : 0;
+      const value = signal + sensorError;
 
       return [
         finger,

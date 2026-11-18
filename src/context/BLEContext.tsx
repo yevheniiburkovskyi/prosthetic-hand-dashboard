@@ -4,8 +4,20 @@ import {
   SENSOR_CHARACTERISTICS,
   SERVICE_UUID,
 } from '@/lib/ble';
+import {
+  applyCalibration,
+  CALIBRATION_DURATION_MS,
+  computeCalibration,
+  MIN_CALIBRATION_SAMPLES,
+  type Calibration,
+} from '@/lib/calibration';
 import { EMPTY_READINGS } from '@/lib/constants';
-import { DEMO_INTERVAL_MS, getDemoReadings } from '@/lib/demo';
+import {
+  DEFAULT_DEMO_SETTINGS,
+  DEMO_INTERVAL_MS,
+  getDemoReadings,
+  type DemoSettings,
+} from '@/lib/demo';
 import type { HandReadings, SensorKind } from '@/types/sensorType';
 import {
   createContext,
@@ -35,9 +47,33 @@ interface BLEContextType {
   /** When on, readings come from replayed mock data instead of a device. */
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
+  /** Demo scenario and noise simulation; persisted across reloads. */
+  demoSettings: DemoSettings;
+  updateDemoSettings: (patch: Partial<DemoSettings>) => void;
+  /** Zero-load calibration applied to FSR readings, if any. */
+  fsrCalibration: Calibration | null;
+  isCalibratingFsr: boolean;
+  /** Samples FSR sensors at rest, then removes their offset and noise. */
+  calibrateFsr: () => Promise<void>;
+  resetFsrCalibration: () => void;
 }
 
 const DEMO_MODE_STORAGE_KEY = 'demoMode';
+const DEMO_SETTINGS_STORAGE_KEY = 'demoSettings';
+
+const loadDemoSettings = (): DemoSettings => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(DEMO_SETTINGS_STORAGE_KEY) ?? '{}'
+    );
+    return {
+      scenario: stored.scenario === 'states' ? 'states' : 'normal',
+      noise: stored.noise === true,
+    };
+  } catch {
+    return DEFAULT_DEMO_SETTINGS;
+  }
+};
 
 const EMPTY_ALL_READINGS: AllReadings = {
   temperature: EMPTY_READINGS,
@@ -52,10 +88,21 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
   const [isDemoMode, setIsDemoMode] = useState(
     () => localStorage.getItem(DEMO_MODE_STORAGE_KEY) === 'true'
   );
+  const [demoSettings, setDemoSettings] = useState(loadDemoSettings);
+  const demoSettingsRef = useRef(demoSettings);
+
+  const [fsrCalibration, setFsrCalibration] = useState<Calibration | null>(
+    null
+  );
+  const [isCalibratingFsr, setIsCalibratingFsr] = useState(false);
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const isManualDisconnectRef = useRef(false);
-  const latestReadingsRef = useRef<AllReadings>(EMPTY_ALL_READINGS);
+  /** Uncalibrated readings as received from the device / demo. */
+  const rawReadingsRef = useRef<AllReadings>(EMPTY_ALL_READINGS);
+  const fsrCalibrationRef = useRef<Calibration | null>(null);
+  /** Collects raw FSR samples while a calibration is running. */
+  const calibrationSamplesRef = useRef<HandReadings[] | null>(null);
   const listenersRef = useRef<Record<SensorKind, Set<ReadingsListener>>>({
     temperature: new Set(),
     fsr: new Set(),
@@ -63,39 +110,101 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
 
   const publish = useCallback(
     (kind: SensorKind, update: Partial<HandReadings>) => {
-      const current = latestReadingsRef.current;
-      const next = { ...current, [kind]: { ...current[kind], ...update } };
+      const raw = { ...rawReadingsRef.current[kind], ...update };
+      rawReadingsRef.current = { ...rawReadingsRef.current, [kind]: raw };
 
-      latestReadingsRef.current = next;
-      setReadings(next);
-      listenersRef.current[kind].forEach((listener) => listener(next[kind]));
+      let output = raw;
+      if (kind === 'fsr') {
+        calibrationSamplesRef.current?.push(raw);
+        if (fsrCalibrationRef.current) {
+          output = applyCalibration(raw, fsrCalibrationRef.current);
+        }
+      }
+
+      setReadings((prev) => ({ ...prev, [kind]: output }));
+      listenersRef.current[kind].forEach((listener) => listener(output));
     },
     []
   );
 
   const resetReadings = useCallback(() => {
-    latestReadingsRef.current = EMPTY_ALL_READINGS;
+    rawReadingsRef.current = EMPTY_ALL_READINGS;
     setReadings(EMPTY_ALL_READINGS);
+  }, []);
+
+  const resetFsrCalibration = useCallback(() => {
+    fsrCalibrationRef.current = null;
+    setFsrCalibration(null);
+  }, []);
+
+  const calibrateFsr = useCallback(async () => {
+    if (calibrationSamplesRef.current) return;
+
+    const samples: HandReadings[] = [];
+    calibrationSamplesRef.current = samples;
+    setIsCalibratingFsr(true);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, CALIBRATION_DURATION_MS)
+    );
+
+    calibrationSamplesRef.current = null;
+    setIsCalibratingFsr(false);
+
+    if (samples.length < MIN_CALIBRATION_SAMPLES) {
+      toast.error(
+        'Not enough sensor data to calibrate. Connect the device or enable demo mode.'
+      );
+      return;
+    }
+
+    const calibration = computeCalibration(samples);
+    fsrCalibrationRef.current = calibration;
+    setFsrCalibration(calibration);
+    toast.success('FSR sensors calibrated.');
   }, []);
 
   const setDemoMode = useCallback(
     (enabled: boolean) => {
       localStorage.setItem(DEMO_MODE_STORAGE_KEY, String(enabled));
       resetReadings();
+      // A calibration belongs to the source it was measured on.
+      resetFsrCalibration();
       setIsDemoMode(enabled);
     },
-    [resetReadings]
+    [resetReadings, resetFsrCalibration]
+  );
+
+  const updateDemoSettings = useCallback(
+    (patch: Partial<DemoSettings>) => {
+      const prev = demoSettingsRef.current;
+      const next = { ...prev, ...patch };
+
+      // Noise changes the sensors' resting offset, so the old calibration
+      // no longer matches.
+      if (next.noise !== prev.noise) resetFsrCalibration();
+
+      demoSettingsRef.current = next;
+      localStorage.setItem(DEMO_SETTINGS_STORAGE_KEY, JSON.stringify(next));
+      setDemoSettings(next);
+    },
+    [resetFsrCalibration]
   );
 
   // Demo mode replays mock data through the same publish path as real BLE.
+  // Settings are read from a ref so changing them keeps the demo clock
+  // (and therefore chart/log timestamps) continuous.
   useEffect(() => {
     if (!isDemoMode) return;
 
     const startedAt = performance.now();
     const id = setInterval(() => {
       const elapsed = performance.now() - startedAt;
-      publish('temperature', getDemoReadings('temperature', elapsed));
-      publish('fsr', getDemoReadings('fsr', elapsed));
+      const settings = demoSettingsRef.current;
+      // While calibrating, simulate a relaxed hand like a real user would.
+      const resting = calibrationSamplesRef.current !== null;
+      publish('temperature', getDemoReadings('temperature', elapsed, settings));
+      publish('fsr', getDemoReadings('fsr', elapsed, settings, { resting }));
     }, DEMO_INTERVAL_MS);
 
     return () => clearInterval(id);
@@ -215,8 +324,28 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       subscribe,
       isDemoMode,
       setDemoMode,
+      demoSettings,
+      updateDemoSettings,
+      fsrCalibration,
+      isCalibratingFsr,
+      calibrateFsr,
+      resetFsrCalibration,
     }),
-    [status, readings, connect, disconnect, subscribe, isDemoMode, setDemoMode]
+    [
+      demoSettings,
+      updateDemoSettings,
+      status,
+      readings,
+      connect,
+      disconnect,
+      subscribe,
+      isDemoMode,
+      setDemoMode,
+      fsrCalibration,
+      isCalibratingFsr,
+      calibrateFsr,
+      resetFsrCalibration,
+    ]
   );
 
   return <BLEContext.Provider value={value}>{children}</BLEContext.Provider>;
