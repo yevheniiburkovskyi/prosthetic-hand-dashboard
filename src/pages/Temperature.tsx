@@ -4,11 +4,22 @@ import SensorCharts from '@/components/SensorCharts';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/Card';
 import { useBLEContext } from '@/context/BLEContext';
-import { FINGER_LABELS, FINGERS, TEMPERATURE_LIMIT } from '@/lib/constants';
+import {
+  FINGER_LABELS,
+  FINGERS,
+  TEMPERATURE_THRESHOLDS,
+} from '@/lib/constants';
+import { getLevel, LEVEL_STYLES, type Level } from '@/lib/levels';
 import { cn } from '@/lib/utils';
 
 const Y_AXIS_DOMAIN = [0, 100];
 const formatCelsiusTick = (value: number) => `${value}°C`;
+
+const LEVEL_LABELS: Record<Level, string> = {
+  normal: 'Normal',
+  warning: 'Warm',
+  critical: 'High',
+};
 
 const Temperature = () => {
   const { readings } = useBLEContext();
@@ -23,27 +34,23 @@ const Temperature = () => {
         <ul className="flex w-full flex-wrap gap-4">
           {FINGERS.map((finger) => {
             const { value } = readings.temperature[finger];
-            const isHigh = value > TEMPERATURE_LIMIT;
+            const level = getLevel(value, TEMPERATURE_THRESHOLDS);
+            const styles = LEVEL_STYLES[level];
             return (
               <li key={finger} className="flex-1">
                 <Card
                   className={cn(
                     'flex flex-col justify-between gap-4',
-                    isHigh && 'border-red-500'
+                    styles.border
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold">{FINGER_LABELS[finger]}</p>
-                    <Thermometer
-                      stroke={isHigh ? 'var(--color-red-500)' : 'currentColor'}
-                    />
+                    <Thermometer stroke={styles.icon} />
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-2xl font-bold">{value}°C</p>
-                    <Badge
-                      variant={isHigh ? 'error' : 'success'}
-                      title={isHigh ? 'High' : 'Normal'}
-                    />
+                    <Badge variant={styles.badge} title={LEVEL_LABELS[level]} />
                   </div>
                 </Card>
               </li>
