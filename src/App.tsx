@@ -1,11 +1,25 @@
-import { Button } from '@/components/ui/button';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { Toaster } from '@/components/ui/sonner';
+import NavigationMenu from './components/NavigationMenu';
+import Temperature from './pages/Temperature';
+import FSR from './pages/FSR';
 
-function App() {
+const App = () => {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center">
-      <Button>Click me test </Button>
-    </div>
+    <main className="bg-background flex h-screen">
+      <NavigationMenu />
+
+      <section className="flex h-full w-full flex-col gap-10">
+        <Routes>
+          <Route path="/temperature" element={<Temperature />} />
+          <Route path="/fsr" element={<FSR />} />
+          <Route path="*" element={<Navigate to="/temperature" replace />} />
+        </Routes>
+      </section>
+
+      <Toaster />
+    </main>
   );
-}
+};
 
 export default App;
