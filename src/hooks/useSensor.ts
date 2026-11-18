@@ -1,66 +1,76 @@
 import { useBLEContext } from '@/context/BLEContext';
-import type { SensorBLEData } from '@/types/bleType';
+import { FINGERS } from '@/lib/constants';
+import type {
+  HandReadings,
+  SensorKind,
+  SensorSample,
+} from '@/types/sensorType';
 import { useCallback, useEffect, useState } from 'react';
 
-const X_AXIS_WINDOW_SIZE = 5;
+const CHART_WINDOW_SECONDS = 5;
+// Keep a little history past the left edge so lines enter the chart smoothly.
+const CHART_BUFFER_SECONDS = CHART_WINDOW_SECONDS + 1;
 
-interface UseSensorOptions<TChartData extends { time: number }> {
-  sensorData: SensorBLEData;
-  createMeasure: (sensorData: SensorBLEData) => TChartData;
-}
+const toSample = (readings: HandReadings): SensorSample => {
+  const latestTimestamp = Math.max(
+    ...FINGERS.map((f) => readings[f].timestamp)
+  );
 
-const useSensor = <TChartData extends { time: number }>({
-  sensorData,
-  createMeasure,
-}: UseSensorOptions<TChartData>) => {
-  const { isBLEConnected } = useBLEContext();
+  return {
+    time: latestTimestamp / 1000,
+    thumb: readings.thumb.value,
+    index: readings.index.value,
+    middle: readings.middle.value,
+    ring: readings.ring.value,
+    pinky: readings.pinky.value,
+  };
+};
 
-  const [logs, setLogs] = useState<TChartData[]>([]);
-  const [chartData, setChartData] = useState<TChartData[]>([]);
-  const [isRealTimeChartRunning, setIsRealTimeChartRunning] = useState(false);
-  const [isLogging, setIsLogging] = useState(false);
+const useSensor = (kind: SensorKind) => {
+  const { subscribe } = useBLEContext();
 
-  const toggleChartRunning = useCallback(() => {
-    setIsRealTimeChartRunning((prev) => !prev);
-  }, []);
+  const [chartData, setChartData] = useState<SensorSample[]>([]);
+  const [logs, setLogs] = useState<SensorSample[]>([]);
+  const [isChartRunning, setIsChartRunning] = useState(true);
+  const [isLogging, setIsLogging] = useState(true);
 
-  const toggleLogging = useCallback(() => {
-    setIsLogging((prev) => !prev);
-  }, []);
-
-  // Collect data into buffer on every sensor change (cheap, no re-render)
-  useEffect(() => {
-    if (!isRealTimeChartRunning) {
-      return;
-    }
-
-    const measure = createMeasure(sensorData);
-
-    if (isLogging) {
-      setLogs((prevLogs) => [...prevLogs, measure]);
-    }
-
-    setChartData((prevChartData) => [...prevChartData, measure]);
-  }, [sensorData, isRealTimeChartRunning, isLogging, createMeasure]);
+  const toggleChartRunning = useCallback(
+    () => setIsChartRunning((prev) => !prev),
+    []
+  );
+  const toggleLogging = useCallback(() => setIsLogging((prev) => !prev), []);
 
   useEffect(() => {
-    if (isBLEConnected) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsRealTimeChartRunning(true);
-      setIsLogging(true);
-    }
-  }, [isBLEConnected]);
+    if (!isChartRunning && !isLogging) return;
 
-  const lastTime =
-    chartData.length > 0 ? chartData[chartData.length - 1].time : 0;
-  const windowEnd = Math.max(X_AXIS_WINDOW_SIZE, lastTime);
-  const windowStart = windowEnd - X_AXIS_WINDOW_SIZE;
-  const xAxisDomain: [number, number] = [windowStart, windowEnd];
+    return subscribe(kind, (readings) => {
+      const sample = toSample(readings);
+
+      if (isChartRunning) {
+        const cutoff = sample.time - CHART_BUFFER_SECONDS;
+        setChartData((prev) => [
+          ...prev.filter((point) => point.time >= cutoff),
+          sample,
+        ]);
+      }
+
+      if (isLogging) {
+        setLogs((prev) => [...prev, sample]);
+      }
+    });
+  }, [kind, subscribe, isChartRunning, isLogging]);
+
+  const lastTime = chartData.at(-1)?.time ?? 0;
+  const windowEnd = Math.max(CHART_WINDOW_SECONDS, lastTime);
+  const xAxisDomain: [number, number] = [
+    windowEnd - CHART_WINDOW_SECONDS,
+    windowEnd,
+  ];
 
   return {
     chartData,
     logs,
-    isRealTimeChartRunning,
+    isChartRunning,
     isLogging,
     toggleChartRunning,
     toggleLogging,

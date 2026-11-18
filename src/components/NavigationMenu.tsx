@@ -1,36 +1,25 @@
-import {
-  Activity,
-  Flame,
-  Gauge,
-  LayoutDashboard,
-  Thermometer,
-  Vibrate,
-} from 'lucide-react';
-import { memo } from 'react';
-import NavigationItem from './ui/NavigationItem';
+import { Activity, Gauge, Thermometer } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import NavigationItem from './ui/NavigationItem';
 
-const NavigationMenu = () => {
-  return (
-    <aside className="h-screen min-w-[250px] border-r border-neutral-200 bg-neutral-50 py-4">
-      <Link className="mb-4 flex items-center gap-2 px-4" to="/">
-        <Activity />
-        <h3 className="text-xl font-semibold">Prosthetic System</h3>
-      </Link>
-      <div className="h-[1px] w-full bg-neutral-200" />
-      <nav className="flex flex-col gap-1 px-2 py-4">
-        <NavigationItem label={'Overview'} to={'/'} icon={LayoutDashboard} />
-        <NavigationItem
-          label={'Temperature'}
-          to={'/temperature'}
-          icon={Thermometer}
-        />
-        <NavigationItem label={'FSR Sensor'} to={'/fsr'} icon={Gauge} />
-        <NavigationItem label={'Vibration'} to={'/vibration'} icon={Vibrate} />
-        <NavigationItem label={'Heating'} to={'/heating'} icon={Flame} />
-      </nav>
-    </aside>
-  );
-};
+const NAV_ITEMS = [
+  { label: 'Temperature', to: '/temperature', icon: Thermometer },
+  { label: 'FSR Sensor', to: '/fsr', icon: Gauge },
+];
 
-export default memo(NavigationMenu);
+const NavigationMenu = () => (
+  <aside className="h-screen min-w-[250px] border-r border-neutral-200 bg-neutral-50 py-4">
+    <Link className="mb-4 flex items-center gap-2 px-4" to="/">
+      <Activity />
+      <h3 className="text-xl font-semibold">Prosthetic System</h3>
+    </Link>
+    <div className="h-px w-full bg-neutral-200" />
+    <nav className="flex flex-col gap-1 px-2 py-4">
+      {NAV_ITEMS.map((item) => (
+        <NavigationItem key={item.to} {...item} />
+      ))}
+    </nav>
+  </aside>
+);
+
+export default NavigationMenu;

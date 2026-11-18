@@ -5,45 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const downloadLogs = (data: string, filename: string = 'logs.csv') => {
-  if (!data || data.length === 0) {
-    alert('Data is empty. Nothing to download.');
-    return;
-  }
-
-  const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
-
-  const url = URL.createObjectURL(blob);
-
+export const downloadFile = (
+  content: string,
+  filename: string,
+  type = 'text/csv;charset=utf-8'
+) => {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
+  link.download = filename;
   link.click();
-
-  document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
 
-export const formatLogs = (logs: Record<string, number | string>[]): string => {
-  if (logs.length === 0) {
-    return '';
-  }
+export const toCsvHeader = (row: object): string => Object.keys(row).join(',');
 
-  const header = Object.keys(logs[0]).join(',');
-  const rows = logs.map((log) => Object.values(log).join(',')).join('\n');
+export const toCsvRows = (rows: object[]): string =>
+  rows.map((row) => Object.values(row).join(',')).join('\n');
 
-  return `${header}\n${rows}`;
-};
+export const toCsv = (rows: object[]): string =>
+  rows.length === 0 ? '' : `${toCsvHeader(rows[0])}\n${toCsvRows(rows)}`;
 
 export const formatTime = (totalSeconds: number): string => {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.floor(totalSeconds % 60);
+  const total = Math.max(0, Math.floor(totalSeconds));
+  const hh = Math.floor(total / 3600);
+  const mm = Math.floor((total % 3600) / 60);
+  const ss = total % 60;
 
-  const hh = hours.toString().padStart(2, '0');
-  const mm = minutes.toString().padStart(2, '0');
-  const ss = seconds.toString().padStart(2, '0');
-
-  return `${hh}:${mm}:${ss}`;
+  return [hh, mm, ss].map((n) => n.toString().padStart(2, '0')).join(':');
 };

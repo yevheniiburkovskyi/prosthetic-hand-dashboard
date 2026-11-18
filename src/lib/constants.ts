@@ -1,37 +1,24 @@
-import type { SensorBLEData } from '@/types/bleType';
-import { FingerName } from '@/types/sensorType';
+import type { Finger, HandReadings } from '@/types/sensorType';
 
 export const TEMPERATURE_LIMIT = 100;
 export const MAX_FSR_VALUE = 4050;
 
-export const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-export const TEMPERATURE_THUMB_UUID = '1c95d5d3-d300-4172-bc4a-bf2436f6d532';
-export const FSR_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+export const FINGERS = ['thumb', 'index', 'middle', 'ring', 'pinky'] as const;
 
-export const INITIAL_SENSOR_DATA: SensorBLEData = {
-  thumb: {
-    name: FingerName.THUMB,
-    value: 0,
-    timestamp: 0,
-  },
-  index: {
-    name: FingerName.INDEX,
-    value: 0,
-    timestamp: 0,
-  },
-  middle: {
-    name: FingerName.MIDDLE,
-    value: 0,
-    timestamp: 0,
-  },
-  ring: {
-    name: FingerName.RING,
-    value: 0,
-    timestamp: 0,
-  },
-  pinky: {
-    name: FingerName.PINKY,
-    value: 0,
-    timestamp: 0,
-  },
+export const FINGER_LABELS: Record<Finger, string> = {
+  thumb: 'Thumb',
+  index: 'Index',
+  middle: 'Middle',
+  ring: 'Ring',
+  pinky: 'Pinky',
+};
+
+const EMPTY_READING = { value: 0, timestamp: 0 };
+
+export const EMPTY_READINGS: HandReadings = {
+  thumb: EMPTY_READING,
+  index: EMPTY_READING,
+  middle: EMPTY_READING,
+  ring: EMPTY_READING,
+  pinky: EMPTY_READING,
 };

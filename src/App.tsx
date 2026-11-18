@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import NavigationMenu from './components/NavigationMenu';
 import Temperature from './pages/Temperature';
@@ -11,11 +11,9 @@ const App = () => {
 
       <section className="flex h-full w-full flex-col gap-10">
         <Routes>
-          <Route path="/" element={<div>Overview</div>} />
           <Route path="/temperature" element={<Temperature />} />
           <Route path="/fsr" element={<FSR />} />
-          <Route path="/vibration" element={<div>Vibration</div>} />
-          <Route path="/heating" element={<div>Heating</div>} />
+          <Route path="*" element={<Navigate to="/temperature" replace />} />
         </Routes>
       </section>
 

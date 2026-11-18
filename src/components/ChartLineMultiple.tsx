@@ -1,5 +1,4 @@
-'use client';
-
+import { memo } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -10,6 +9,8 @@ import {
   type XAxisProps,
   type YAxisProps,
 } from 'recharts';
+import type { AxisDomain } from 'recharts/types/util/types';
+import { Pause, Play } from 'lucide-react';
 
 import {
   ChartContainer,
@@ -17,19 +18,14 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import Card from './ui/Card';
-import { memo } from 'react';
-import type { CategoricalChartProps } from 'recharts/types/chart/generateCategoricalChart';
-import type { AxisDomain } from 'recharts/types/util/types';
 import { Button } from './ui/button';
-import { Pause, Play } from 'lucide-react';
 
 interface ChartLineMultipleProps {
-  data: CategoricalChartProps['data'];
+  data: object[];
   config: ChartConfig;
   title?: string;
   description?: string;
   xAxisKey?: string;
-  yAxisKey?: string;
   xLabel: string;
   yLabel: string;
   xAxisTickFormatter?: XAxisProps['tickFormatter'];
@@ -46,12 +42,11 @@ const ChartLineMultiple = ({
   title,
   description,
   xAxisKey,
-  yAxisKey,
   xLabel,
   yLabel,
   xAxisTickFormatter,
   yAxisTickFormatter,
-  xAxisDomain,
+  xAxisDomain = ['dataMin', 'dataMax'],
   yAxisDomain,
   toggleChartRunning,
   isRunning,
@@ -60,48 +55,35 @@ const ChartLineMultiple = ({
     <Card>
       <div className="mb-4 flex justify-between">
         <div>
-          {title && <p className="text-semibold text-lg">{title}</p>}
+          {title && <p className="text-lg font-semibold">{title}</p>}
           {description && (
             <p className="text-sm text-neutral-500">{description}</p>
           )}
         </div>
-        {
-          <div className="flex gap-2">
-            {toggleChartRunning && (
-              <Button onClick={toggleChartRunning} className="max-w-min">
-                {isRunning ? 'Pause' : 'Run'}
-                {isRunning ? <Pause /> : <Play />}
-              </Button>
-            )}
-          </div>
-        }
+        {toggleChartRunning && (
+          <Button onClick={toggleChartRunning}>
+            {isRunning ? 'Pause' : 'Run'}
+            {isRunning ? <Pause /> : <Play />}
+          </Button>
+        )}
       </div>
       <ChartContainer config={config} className="h-[50vh] w-full">
         <LineChart accessibilityLayer data={data}>
           <CartesianGrid />
           <XAxis
             dataKey={xAxisKey}
-            tickLine={true}
-            axisLine={true}
+            type="number"
             tickMargin={3}
+            tickCount={6}
             tickFormatter={xAxisTickFormatter}
             label={{ value: xLabel, position: 'insideBottom', offset: -5 }}
-            type="number"
-            domain={xAxisDomain || ['dataMin', 'dataMax']}
-            tickCount={6}
-            allowDataOverflow={true}
+            domain={xAxisDomain}
+            allowDataOverflow
           />
           <YAxis
-            dataKey={yAxisKey}
-            tickLine={true}
-            axisLine={true}
             tickMargin={3}
-            label={{
-              value: yLabel,
-              angle: -90,
-              position: 'insideLeft',
-            }}
             tickFormatter={yAxisTickFormatter}
+            label={{ value: yLabel, angle: -90, position: 'insideLeft' }}
             domain={yAxisDomain}
           />
           <Legend verticalAlign="top" height={30} />
@@ -110,6 +92,7 @@ const ChartLineMultiple = ({
             <Line
               key={key}
               dataKey={key}
+              name={typeof item.label === 'string' ? item.label : key}
               type="monotone"
               stroke={item.color}
               strokeWidth={2}

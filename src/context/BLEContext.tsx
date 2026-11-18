@@ -1,185 +1,186 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  FSR_CHARACTERISTIC_UUID,
-  INITIAL_SENSOR_DATA,
+  BLE_DEVICE_NAME,
+  SENSOR_CHARACTERISTICS,
   SERVICE_UUID,
-  TEMPERATURE_THUMB_UUID,
-} from '@/lib/constants';
-import type { SensorBLEData } from '@/types/bleType';
-import { FingerName } from '@/types/sensorType';
-import React, {
+} from '@/lib/ble';
+import { EMPTY_READINGS } from '@/lib/constants';
+import type {
+  Finger,
+  HandReadings,
+  SensorKind,
+  SensorReading,
+} from '@/types/sensorType';
+import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
 
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+
+type AllReadings = Record<SensorKind, HandReadings>;
+type ReadingsListener = (readings: HandReadings) => void;
+
 interface BLEContextType {
-  server: BluetoothRemoteGATTServer | null;
-  service: BluetoothRemoteGATTService | null;
-  temperatureData: SensorBLEData;
-  fsrData: SensorBLEData;
-  isBLEConnecting: boolean;
-  isBLEConnected: boolean;
-  connectService: () => Promise<void>;
-  disconnectServer: () => Promise<void>;
-  connectServer: () => Promise<void>;
+  status: ConnectionStatus;
+  /** Latest reading per sensor kind and finger. */
+  readings: AllReadings;
+  connect: () => Promise<void>;
+  disconnect: () => void;
+  /** Called once per BLE notification; returns an unsubscribe function. */
+  subscribe: (kind: SensorKind, listener: ReadingsListener) => () => void;
 }
+
+const EMPTY_ALL_READINGS: AllReadings = {
+  temperature: EMPTY_READINGS,
+  fsr: EMPTY_READINGS,
+};
 
 const BLEContext = createContext<BLEContextType | undefined>(undefined);
 
-const BLEProvider: React.FC<{
-  children: ReactNode;
-}> = ({ children }) => {
-  const [temperatureData, setTemperatureData] =
-    useState<SensorBLEData>(INITIAL_SENSOR_DATA);
-  const [fsrData, setFsrData] = useState<SensorBLEData>(INITIAL_SENSOR_DATA);
+const BLEProvider = ({ children }: { children: ReactNode }) => {
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [readings, setReadings] = useState<AllReadings>(EMPTY_ALL_READINGS);
 
-  const [server, setServer] = useState<BluetoothRemoteGATTServer | null>(null);
-  const [service, setService] = useState<BluetoothRemoteGATTService | null>(
-    null
+  const deviceRef = useRef<BluetoothDevice | null>(null);
+  const isManualDisconnectRef = useRef(false);
+  const latestReadingsRef = useRef<AllReadings>(EMPTY_ALL_READINGS);
+  const listenersRef = useRef<Record<SensorKind, Set<ReadingsListener>>>({
+    temperature: new Set(),
+    fsr: new Set(),
+  });
+
+  const publish = useCallback(
+    (kind: SensorKind, finger: Finger, reading: SensorReading) => {
+      const current = latestReadingsRef.current;
+      const next = {
+        ...current,
+        [kind]: { ...current[kind], [finger]: reading },
+      };
+
+      latestReadingsRef.current = next;
+      setReadings(next);
+      listenersRef.current[kind].forEach((listener) => listener(next[kind]));
+    },
+    []
   );
 
-  const [isServerConnected, setIsServerConnected] = useState(false);
-  const [isServerConnecting, setIsServerConnecting] = useState(false);
-  const [isServiceConnecting, setIsServiceConnecting] = useState(false);
+  const handleDisconnected = useCallback(() => {
+    deviceRef.current = null;
+    latestReadingsRef.current = EMPTY_ALL_READINGS;
+    setReadings(EMPTY_ALL_READINGS);
+    setStatus('disconnected');
 
-  const connectServer = useCallback(async () => {
+    if (isManualDisconnectRef.current) {
+      toast.info('Disconnected from BLE device.');
+    } else {
+      toast.error('Connection to BLE device lost.');
+    }
+    isManualDisconnectRef.current = false;
+  }, []);
+
+  const connect = useCallback(async () => {
+    if (!navigator.bluetooth) {
+      toast.error(
+        'Web Bluetooth is not supported in this browser. Use Chrome or Edge.'
+      );
+      return;
+    }
+
+    setStatus('connecting');
+    toast.info('Searching for BLE device...');
+
+    let device: BluetoothDevice | undefined;
+
     try {
-      toast.info('Start searching for BLE device');
-      setIsServerConnecting(true);
-
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [{ name: 'Prosthetic-Hand' }],
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: BLE_DEVICE_NAME }],
         optionalServices: [SERVICE_UUID],
       });
 
-      const server = await device.gatt?.connect();
-
-      if (server) {
-        setServer(server);
+      if (!device.gatt) {
+        throw new Error('Device does not support GATT.');
       }
-    } catch (error) {
-      console.error('Connection error:', error);
-      toast.error(`Failed to connect to BLE device: ${error}}`);
-    } finally {
-      setIsServerConnecting(false);
-    }
-  }, []);
 
-  const connectService = useCallback(async () => {
-    if (!server) return;
-
-    try {
-      setIsServiceConnecting(true);
+      const server = await device.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
-      setService(service);
+
+      // A missing characteristic should not take the whole connection down.
+      const results = await Promise.allSettled(
+        SENSOR_CHARACTERISTICS.map(async ({ uuid, kind, finger, parse }) => {
+          const characteristic = await service.getCharacteristic(uuid);
+          characteristic.addEventListener('characteristicvaluechanged', () => {
+            if (characteristic.value) {
+              publish(kind, finger, parse(characteristic.value));
+            }
+          });
+          await characteristic.startNotifications();
+        })
+      );
+
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          const { kind, uuid } = SENSOR_CHARACTERISTICS[i];
+          console.error(
+            `Subscription error (${kind}, ${uuid}):`,
+            result.reason
+          );
+          toast.error(
+            `Failed to subscribe to ${kind} sensor: ${result.reason}`
+          );
+        }
+      });
+
+      device.addEventListener('gattserverdisconnected', handleDisconnected, {
+        once: true,
+      });
+      deviceRef.current = device;
+      setStatus('connected');
+      toast.success(`Connected to BLE device: "${device.name}"`);
     } catch (error) {
-      console.error('Service error:', error);
-      toast.error('Failed to connect to BLE service.');
-    } finally {
-      setIsServiceConnecting(false);
-    }
-  }, [server]);
+      device?.gatt?.disconnect();
+      setStatus('disconnected');
 
-  const disconnectServer = useCallback(async () => {
-    if (!server) return;
-
-    try {
-      server.disconnect();
-      setServer(null);
-      setService(null);
-    } catch (error) {
-      console.error('Disconnection error:', error);
-      toast.error(`Failed to disconnect from BLE device: ${error}`);
-    }
-  }, [server]);
-
-  const subscribeForCharacteristic = useCallback(
-    async (characteristicUUID: string, onReceive: (data: DataView) => void) => {
-      if (!service) {
+      // Thrown when the user closes the device picker.
+      if (error instanceof DOMException && error.name === 'NotFoundError') {
+        toast.info(error.message);
         return;
       }
 
-      try {
-        const sensorChar = await service.getCharacteristic(characteristicUUID);
+      console.error('BLE connection error:', error);
+      toast.error(`Failed to connect to BLE device: ${error}`);
+    }
+  }, [handleDisconnected, publish]);
 
-        await sensorChar.startNotifications();
+  const disconnect = useCallback(() => {
+    if (!deviceRef.current?.gatt) return;
 
-        sensorChar.addEventListener('characteristicvaluechanged', (event) => {
-          const target = event.target as BluetoothRemoteGATTCharacteristic;
-          if (target.value) {
-            onReceive(target.value);
-          }
-        });
-      } catch (error) {
-        console.error('Subscription error:', error);
-        toast.error(`Failed to subscribe to BLE characteristic: ${error}`);
-      }
+    isManualDisconnectRef.current = true;
+    // Fires 'gattserverdisconnected', which resets state in handleDisconnected.
+    deviceRef.current.gatt.disconnect();
+  }, []);
+
+  const subscribe = useCallback(
+    (kind: SensorKind, listener: ReadingsListener) => {
+      const listeners = listenersRef.current[kind];
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     },
-    [service]
+    []
   );
 
-  const isBLEConnecting = isServerConnecting || isServiceConnecting;
-  const isBLEConnected = isServerConnected;
-
-  useEffect(() => {
-    if (server && server.connected) {
-      setIsServerConnected(true);
-
-      connectService().then(() => {
-        toast.success(`Connected to BLE device: "${server.device.name}"`);
-        subscribeForCharacteristic(TEMPERATURE_THUMB_UUID, (data) => {
-          const timestamp = data.getUint32(0, true);
-          const tempValue = data.getFloat32(4, true);
-          setTemperatureData((prev) => ({
-            ...prev,
-            thumb: {
-              name: FingerName.THUMB,
-              value: parseFloat(tempValue.toFixed(1)),
-              timestamp,
-            },
-          }));
-        });
-        subscribeForCharacteristic(FSR_CHARACTERISTIC_UUID, (data) => {
-          const timestamp = data.getUint32(0, true);
-          const forceValue = data.getUint16(4, true);
-          setFsrData((prev) => ({
-            ...prev,
-            thumb: {
-              name: FingerName.THUMB,
-              value: forceValue,
-              timestamp,
-            },
-          }));
-        });
-      });
-    } else {
-      setTemperatureData(INITIAL_SENSOR_DATA);
-      setIsServerConnected((prev) => {
-        if (prev) {
-          toast.error('Disconnected from BLE device.');
-        }
-
-        return false;
-      });
-    }
-  }, [connectServer, connectService, server, subscribeForCharacteristic]);
-
-  const value: BLEContextType = {
-    isBLEConnected,
-    isBLEConnecting,
-    temperatureData,
-    fsrData,
-    server,
-    service,
-    connectServer,
-    connectService,
-    disconnectServer,
-  };
+  const value = useMemo<BLEContextType>(
+    () => ({ status, readings, connect, disconnect, subscribe }),
+    [status, readings, connect, disconnect, subscribe]
+  );
 
   return <BLEContext.Provider value={value}>{children}</BLEContext.Provider>;
 };
@@ -187,7 +188,7 @@ const BLEProvider: React.FC<{
 const useBLEContext = (): BLEContextType => {
   const context = useContext(BLEContext);
   if (!context) {
-    throw new Error('useBLE must be used within a BLEProvider');
+    throw new Error('useBLEContext must be used within a BLEProvider');
   }
 
   return context;

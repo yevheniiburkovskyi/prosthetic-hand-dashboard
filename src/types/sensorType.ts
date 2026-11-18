@@ -1,23 +1,16 @@
-export enum FingerName {
-  THUMB = 'Thumb',
-  INDEX = 'Index',
-  MIDDLE = 'Middle',
-  RING = 'Ring',
-  PINKY = 'Pinky',
-}
+import type { FINGERS } from '@/lib/constants';
 
-export interface Sensor {
-  id: number;
-  name: string;
+export type Finger = (typeof FINGERS)[number];
+
+export type SensorKind = 'temperature' | 'fsr';
+
+export interface SensorReading {
   value: number;
+  /** ms since device boot (uint32 from the BLE packet) */
+  timestamp: number;
 }
 
-export interface SensorChartData {
-  [key: string]: number;
-  time: number;
-  thumb: number;
-  index: number;
-  middle: number;
-  ring: number;
-  pinky: number;
-}
+export type HandReadings = Record<Finger, SensorReading>;
+
+/** One chart / log row: time in seconds plus one value per finger. */
+export type SensorSample = { time: number } & Record<Finger, number>;
