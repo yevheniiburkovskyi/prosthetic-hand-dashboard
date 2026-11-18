@@ -13,14 +13,16 @@ const STATUS_BADGE: Record<
   disconnected: { variant: 'error', title: 'Disconnected' },
 };
 
+const DEMO_BADGE = { variant: 'warning', title: 'Demo mode' } as const;
+
 interface Props extends ComponentProps<'header'> {
   title: string;
   description?: string;
 }
 
 const Header = ({ title, description, ...props }: Props) => {
-  const { status, connect, disconnect } = useBLEContext();
-  const badge = STATUS_BADGE[status];
+  const { status, connect, disconnect, isDemoMode } = useBLEContext();
+  const badge = isDemoMode ? DEMO_BADGE : STATUS_BADGE[status];
 
   return (
     <header className="flex w-full justify-between px-6 pt-6" {...props}>
@@ -43,7 +45,11 @@ const Header = ({ title, description, ...props }: Props) => {
           </Button>
         )}
         {status === 'disconnected' && (
-          <Button onClick={connect}>
+          <Button
+            onClick={connect}
+            disabled={isDemoMode}
+            title={isDemoMode ? 'Turn off demo mode to connect' : undefined}
+          >
             <Bluetooth />
             Connect Device
           </Button>

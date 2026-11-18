@@ -5,16 +5,13 @@ import {
   SERVICE_UUID,
 } from '@/lib/ble';
 import { EMPTY_READINGS } from '@/lib/constants';
-import type {
-  Finger,
-  HandReadings,
-  SensorKind,
-  SensorReading,
-} from '@/types/sensorType';
+import { DEMO_INTERVAL_MS, getDemoReadings } from '@/lib/demo';
+import type { HandReadings, SensorKind } from '@/types/sensorType';
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -35,7 +32,12 @@ interface BLEContextType {
   disconnect: () => void;
   /** Called once per BLE notification; returns an unsubscribe function. */
   subscribe: (kind: SensorKind, listener: ReadingsListener) => () => void;
+  /** When on, readings come from replayed mock data instead of a device. */
+  isDemoMode: boolean;
+  setDemoMode: (enabled: boolean) => void;
 }
+
+const DEMO_MODE_STORAGE_KEY = 'demoMode';
 
 const EMPTY_ALL_READINGS: AllReadings = {
   temperature: EMPTY_READINGS,
@@ -47,6 +49,9 @@ const BLEContext = createContext<BLEContextType | undefined>(undefined);
 const BLEProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [readings, setReadings] = useState<AllReadings>(EMPTY_ALL_READINGS);
+  const [isDemoMode, setIsDemoMode] = useState(
+    () => localStorage.getItem(DEMO_MODE_STORAGE_KEY) === 'true'
+  );
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const isManualDisconnectRef = useRef(false);
@@ -57,12 +62,9 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const publish = useCallback(
-    (kind: SensorKind, finger: Finger, reading: SensorReading) => {
+    (kind: SensorKind, update: Partial<HandReadings>) => {
       const current = latestReadingsRef.current;
-      const next = {
-        ...current,
-        [kind]: { ...current[kind], [finger]: reading },
-      };
+      const next = { ...current, [kind]: { ...current[kind], ...update } };
 
       latestReadingsRef.current = next;
       setReadings(next);
@@ -71,10 +73,37 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
-  const handleDisconnected = useCallback(() => {
-    deviceRef.current = null;
+  const resetReadings = useCallback(() => {
     latestReadingsRef.current = EMPTY_ALL_READINGS;
     setReadings(EMPTY_ALL_READINGS);
+  }, []);
+
+  const setDemoMode = useCallback(
+    (enabled: boolean) => {
+      localStorage.setItem(DEMO_MODE_STORAGE_KEY, String(enabled));
+      resetReadings();
+      setIsDemoMode(enabled);
+    },
+    [resetReadings]
+  );
+
+  // Demo mode replays mock data through the same publish path as real BLE.
+  useEffect(() => {
+    if (!isDemoMode) return;
+
+    const startedAt = performance.now();
+    const id = setInterval(() => {
+      const elapsed = performance.now() - startedAt;
+      publish('temperature', getDemoReadings('temperature', elapsed));
+      publish('fsr', getDemoReadings('fsr', elapsed));
+    }, DEMO_INTERVAL_MS);
+
+    return () => clearInterval(id);
+  }, [isDemoMode, publish]);
+
+  const handleDisconnected = useCallback(() => {
+    deviceRef.current = null;
+    resetReadings();
     setStatus('disconnected');
 
     if (isManualDisconnectRef.current) {
@@ -83,7 +112,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       toast.error('Connection to BLE device lost.');
     }
     isManualDisconnectRef.current = false;
-  }, []);
+  }, [resetReadings]);
 
   const connect = useCallback(async () => {
     if (!navigator.bluetooth) {
@@ -117,7 +146,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
           const characteristic = await service.getCharacteristic(uuid);
           characteristic.addEventListener('characteristicvaluechanged', () => {
             if (characteristic.value) {
-              publish(kind, finger, parse(characteristic.value));
+              publish(kind, { [finger]: parse(characteristic.value) });
             }
           });
           await characteristic.startNotifications();
@@ -178,8 +207,16 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const value = useMemo<BLEContextType>(
-    () => ({ status, readings, connect, disconnect, subscribe }),
-    [status, readings, connect, disconnect, subscribe]
+    () => ({
+      status,
+      readings,
+      connect,
+      disconnect,
+      subscribe,
+      isDemoMode,
+      setDemoMode,
+    }),
+    [status, readings, connect, disconnect, subscribe, isDemoMode, setDemoMode]
   );
 
   return <BLEContext.Provider value={value}>{children}</BLEContext.Provider>;

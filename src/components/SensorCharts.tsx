@@ -2,6 +2,7 @@ import type { AxisDomain } from 'recharts/types/util/types';
 import ChartLineMultiple from './ChartLineMultiple';
 import Logger from './Logger';
 import type { ChartConfig } from './ui/chart';
+import { useBLEContext } from '@/context/BLEContext';
 import { useSensor } from '@/hooks/useSensor';
 import { FINGER_LABELS } from '@/lib/constants';
 import type { SensorKind } from '@/types/sensorType';
@@ -28,8 +29,18 @@ interface Props {
   yAxisTickFormatter?: (value: number) => string;
 }
 
-/** Real-time chart plus logger for one sensor kind. */
-const SensorCharts = ({
+/**
+ * Real-time chart plus logger for one sensor kind. Remounts when the data
+ * source changes so demo and device samples never end up in the same log.
+ */
+const SensorCharts = (props: Props) => {
+  const { isDemoMode } = useBLEContext();
+  return (
+    <SensorChartsContent key={isDemoMode ? 'demo' : 'device'} {...props} />
+  );
+};
+
+const SensorChartsContent = ({
   kind,
   title,
   dataLabel,
