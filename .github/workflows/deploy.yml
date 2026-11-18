@@ -42,6 +42,11 @@ jobs:
       - name: Build
         run: yarn build
 
+      - name: SPA fallback
+        # GitHub Pages serves 404.html for unknown paths, so deep links
+        # like /fsr load the app and let the client router handle them.
+        run: cp dist/index.html dist/404.html
+
       - name: Upload artifact
         # Цей крок створює архів для деплою
         uses: actions/upload-pages-artifact@v3
