@@ -1,24 +1,29 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
   BLE_DEVICE_NAME,
+  encodeCorrectionPacket,
+  FSR_CALIBRATION_UUID,
   SENSOR_CHARACTERISTICS,
   SERVICE_UUID,
 } from '@/lib/ble';
 import {
-  applyCalibration,
   CALIBRATION_DURATION_MS,
   computeCalibration,
+  createCorrectionFilter,
   MIN_CALIBRATION_SAMPLES,
   type Calibration,
+  type CorrectionTarget,
+  type FingerCorrection,
 } from '@/lib/calibration';
-import { EMPTY_READINGS } from '@/lib/constants';
+import { EMPTY_READINGS, FINGERS } from '@/lib/constants';
 import {
   DEFAULT_DEMO_SETTINGS,
   DEMO_INTERVAL_MS,
   getDemoReadings,
+  isDemoPacketDropped,
   type DemoSettings,
 } from '@/lib/demo';
-import type { HandReadings, SensorKind } from '@/types/sensorType';
+import type { Finger, HandReadings, SensorKind } from '@/types/sensorType';
 import {
   createContext,
   useCallback,
@@ -50,10 +55,15 @@ interface BLEContextType {
   /** Demo scenario and noise simulation; persisted across reloads. */
   demoSettings: DemoSettings;
   updateDemoSettings: (patch: Partial<DemoSettings>) => void;
-  /** Zero-load calibration applied to FSR readings, if any. */
+  /** Active FSR correction (offset, filter, dead band), if any. */
   fsrCalibration: Calibration | null;
   isCalibratingFsr: boolean;
-  /** Samples FSR sensors at rest, then removes their offset and noise. */
+  /** Connected firmware accepts corrections over BLE. */
+  deviceSupportsCalibration: boolean;
+  /**
+   * Measures FSR noise at rest, computes a per-sensor correction and sends it
+   * to the device (or applies it in the app if the firmware can't take it).
+   */
   calibrateFsr: () => Promise<void>;
   resetFsrCalibration: () => void;
 }
@@ -73,6 +83,31 @@ const loadDemoSettings = (): DemoSettings => {
   } catch {
     return DEFAULT_DEMO_SETTINGS;
   }
+};
+
+type CorrectionParams = Pick<FingerCorrection, 'offset' | 'deadband' | 'alpha'>;
+const NO_CORRECTION: CorrectionParams = { offset: 0, deadband: 0, alpha: 1 };
+
+const writeCorrections = async (
+  characteristic: BluetoothRemoteGATTCharacteristic,
+  corrections: Record<Finger, CorrectionParams>
+) => {
+  // One small write per finger keeps packets within the default BLE MTU.
+  for (const [index, finger] of FINGERS.entries()) {
+    await characteristic.writeValueWithResponse(
+      encodeCorrectionPacket(index, corrections[finger])
+    );
+  }
+};
+
+const NO_CORRECTIONS = Object.fromEntries(
+  FINGERS.map((f) => [f, NO_CORRECTION])
+) as Record<Finger, CorrectionParams>;
+
+const APPLIED_MESSAGES: Record<CorrectionTarget, string> = {
+  device: 'Calibration sent to the device.',
+  'demo-device': 'Calibration sent to the demo device.',
+  app: 'Calibration applied in the app (firmware does not support remote calibration yet).',
 };
 
 const EMPTY_ALL_READINGS: AllReadings = {
@@ -95,12 +130,21 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     null
   );
   const [isCalibratingFsr, setIsCalibratingFsr] = useState(false);
+  const [deviceSupportsCalibration, setDeviceSupportsCalibration] =
+    useState(false);
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const isManualDisconnectRef = useRef(false);
   /** Uncalibrated readings as received from the device / demo. */
   const rawReadingsRef = useRef<AllReadings>(EMPTY_ALL_READINGS);
-  const fsrCalibrationRef = useRef<Calibration | null>(null);
+  type CorrectionFilter = (readings: HandReadings) => HandReadings;
+  /** Fallback when the firmware can't apply corrections itself. */
+  const appFilterRef = useRef<CorrectionFilter | null>(null);
+  /** Stands in for firmware-side filtering in demo mode. */
+  const demoDeviceFilterRef = useRef<CorrectionFilter | null>(null);
+  const calibrationCharRef = useRef<BluetoothRemoteGATTCharacteristic | null>(
+    null
+  );
   /** Collects raw FSR samples while a calibration is running. */
   const calibrationSamplesRef = useRef<HandReadings[] | null>(null);
   const listenersRef = useRef<Record<SensorKind, Set<ReadingsListener>>>({
@@ -116,9 +160,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       let output = raw;
       if (kind === 'fsr') {
         calibrationSamplesRef.current?.push(raw);
-        if (fsrCalibrationRef.current) {
-          output = applyCalibration(raw, fsrCalibrationRef.current);
-        }
+        if (appFilterRef.current) output = appFilterRef.current(raw);
       }
 
       setReadings((prev) => ({ ...prev, [kind]: output }));
@@ -132,13 +174,30 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     setReadings(EMPTY_ALL_READINGS);
   }, []);
 
-  const resetFsrCalibration = useCallback(() => {
-    fsrCalibrationRef.current = null;
+  /** Removes any active correction from the app, demo device and firmware. */
+  const clearCorrection = useCallback(async () => {
+    appFilterRef.current = null;
+    demoDeviceFilterRef.current = null;
     setFsrCalibration(null);
+
+    if (calibrationCharRef.current) {
+      try {
+        await writeCorrections(calibrationCharRef.current, NO_CORRECTIONS);
+      } catch (error) {
+        console.error('Failed to reset device calibration:', error);
+      }
+    }
   }, []);
+
+  const resetFsrCalibration = useCallback(() => {
+    void clearCorrection();
+  }, [clearCorrection]);
 
   const calibrateFsr = useCallback(async () => {
     if (calibrationSamplesRef.current) return;
+
+    // Measure the sensors' own noise, not an earlier correction's output.
+    await clearCorrection();
 
     const samples: HandReadings[] = [];
     calibrationSamplesRef.current = samples;
@@ -159,10 +218,28 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const calibration = computeCalibration(samples);
-    fsrCalibrationRef.current = calibration;
-    setFsrCalibration(calibration);
-    toast.success('FSR sensors calibrated.');
-  }, []);
+    let appliedOn: CorrectionTarget = 'app';
+
+    if (isDemoMode) {
+      demoDeviceFilterRef.current = createCorrectionFilter(calibration.fingers);
+      appliedOn = 'demo-device';
+    } else if (calibrationCharRef.current) {
+      try {
+        await writeCorrections(calibrationCharRef.current, calibration.fingers);
+        appliedOn = 'device';
+      } catch (error) {
+        console.error('Failed to send calibration:', error);
+        toast.warning('Could not send calibration to the device.');
+      }
+    }
+
+    if (appliedOn === 'app') {
+      appFilterRef.current = createCorrectionFilter(calibration.fingers);
+    }
+
+    setFsrCalibration({ ...calibration, appliedOn });
+    toast.success(APPLIED_MESSAGES[appliedOn]);
+  }, [clearCorrection, isDemoMode]);
 
   const setDemoMode = useCallback(
     (enabled: boolean) => {
@@ -204,7 +281,12 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       // While calibrating, simulate a relaxed hand like a real user would.
       const resting = calibrationSamplesRef.current !== null;
       publish('temperature', getDemoReadings('temperature', elapsed, settings));
-      publish('fsr', getDemoReadings('fsr', elapsed, settings, { resting }));
+      const fsr = getDemoReadings('fsr', elapsed, settings, { resting });
+      // The simulated firmware filters every sample, even ones it fails to send.
+      const deviceOutput = demoDeviceFilterRef.current?.(fsr) ?? fsr;
+      if (!isDemoPacketDropped('fsr', elapsed, settings)) {
+        publish('fsr', deviceOutput);
+      }
     }, DEMO_INTERVAL_MS);
 
     return () => clearInterval(id);
@@ -212,6 +294,10 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
 
   const handleDisconnected = useCallback(() => {
     deviceRef.current = null;
+    calibrationCharRef.current = null;
+    appFilterRef.current = null;
+    setFsrCalibration(null);
+    setDeviceSupportsCalibration(false);
     resetReadings();
     setStatus('disconnected');
 
@@ -275,6 +361,21 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
         }
       });
 
+      // Optional: firmware that can apply FSR corrections itself.
+      calibrationCharRef.current = await service
+        .getCharacteristic(FSR_CALIBRATION_UUID)
+        .catch(() => null);
+      if (calibrationCharRef.current) {
+        // Start from a known state: no correction on the device.
+        await writeCorrections(
+          calibrationCharRef.current,
+          NO_CORRECTIONS
+        ).catch((error) =>
+          console.error('Failed to reset device calibration:', error)
+        );
+      }
+      setDeviceSupportsCalibration(calibrationCharRef.current !== null);
+
       device.addEventListener('gattserverdisconnected', handleDisconnected, {
         once: true,
       });
@@ -328,6 +429,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       updateDemoSettings,
       fsrCalibration,
       isCalibratingFsr,
+      deviceSupportsCalibration,
       calibrateFsr,
       resetFsrCalibration,
     }),
@@ -343,6 +445,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       setDemoMode,
       fsrCalibration,
       isCalibratingFsr,
+      deviceSupportsCalibration,
       calibrateFsr,
       resetFsrCalibration,
     ]

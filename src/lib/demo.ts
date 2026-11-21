@@ -30,7 +30,28 @@ export interface FingerWave {
   period: number;
   /** Phase offset in radians, so fingers don't move in lockstep. */
   phase: number;
+  /** Simulated measurement problem, to exercise signal analysis. */
+  fault?: DemoFault;
 }
+
+/**
+ * - spikes: a short negative glitch every few seconds
+ * - noisy: heavy random noise above the analysis tolerance
+ * - saturation: amplified so peaks hit the sensor maximum
+ * - stuck: periodically freezes at one value
+ */
+export type DemoFault = 'spikes' | 'noisy' | 'saturation' | 'stuck';
+
+const SPIKE_EVERY_TICKS = 70; // ~7 s at 10 Hz
+const SPIKE_DROP = 900;
+const NOISY_AMPLITUDE = 120;
+const SATURATION_GAIN = 5;
+const STUCK_CYCLE_SECONDS = 12;
+const STUCK_HOLD_SECONDS = 3;
+const STUCK_MIN_VALUE = 400;
+const PACKET_GAP_CYCLE_MS = 20_000;
+const PACKET_GAP_START_MS = 12_000;
+const PACKET_GAP_MS = 600;
 
 export type DemoProfile = Record<Finger, FingerWave>;
 
@@ -62,7 +83,8 @@ const DEMO_SOURCES: Record<SensorKind, DemoSource> = {
     min: 0,
     max: MAX_FSR_VALUE,
     tremor: 15,
-    noise: 12,
+    // ~3–4% of range: above the ±2% analysis tolerance, so it gets flagged.
+    noise: 150,
     restOffsets: FSR_REST_OFFSETS,
   },
 };
@@ -77,6 +99,57 @@ const wave = (t: number, { period, phase }: FingerWave) =>
 /** Fast low-amplitude wobble in [-1, 1], different per finger. */
 const tremor = (t: number, seed: number) =>
   Math.sin(t * 9.1 + seed) * 0.6 + Math.sin(t * 17.3 + seed * 2.1) * 0.4;
+
+const signalAt = (
+  t: number,
+  fingerWave: FingerWave,
+  tremorAmp: number,
+  seed: number
+) =>
+  Math.max(
+    0,
+    fingerWave.center +
+      fingerWave.swing * wave(t, fingerWave) +
+      tremorAmp * tremor(t, seed)
+  );
+
+const applyFault = (
+  fault: DemoFault,
+  value: number,
+  t: number,
+  signalAtTime: (time: number) => number
+): number => {
+  switch (fault) {
+    case 'spikes':
+      return Math.floor(t * 10) % SPIKE_EVERY_TICKS === 0
+        ? value - SPIKE_DROP
+        : value;
+    case 'noisy':
+      return value + (Math.random() * 2 - 1) * NOISY_AMPLITUDE;
+    case 'saturation':
+      return value * SATURATION_GAIN;
+    case 'stuck': {
+      const cyclePosition = t % STUCK_CYCLE_SECONDS;
+      return cyclePosition < STUCK_HOLD_SECONDS
+        ? Math.max(STUCK_MIN_VALUE, Math.round(signalAtTime(t - cyclePosition)))
+        : value;
+    }
+  }
+};
+
+/** "All states" demo periodically loses FSR packets, like a weak BLE link. */
+export const isDemoPacketDropped = (
+  kind: SensorKind,
+  elapsedMs: number,
+  { scenario }: DemoSettings
+) => {
+  if (kind !== 'fsr' || scenario !== 'states') return false;
+  const cyclePosition = elapsedMs % PACKET_GAP_CYCLE_MS;
+  return (
+    cyclePosition >= PACKET_GAP_START_MS &&
+    cyclePosition < PACKET_GAP_START_MS + PACKET_GAP_MS
+  );
+};
 
 const round = (value: number, decimals: number) => {
   const factor = 10 ** decimals;
@@ -101,20 +174,20 @@ export const getDemoReadings = (
   return Object.fromEntries(
     FINGERS.map((finger, i) => {
       const fingerWave = profile[finger];
-      const signal =
-        resting && kind === 'fsr'
-          ? 0
-          : Math.max(
-              0,
-              fingerWave.center +
-                fingerWave.swing * wave(t, fingerWave) +
-                source.tremor * tremor(t, i * 1.7)
-            );
-      const sensorError = noise
-        ? (source.restOffsets?.[finger] ?? 0) +
-          (Math.random() * 2 - 1) * source.noise
-        : 0;
-      const value = signal + sensorError;
+      const signalAtTime = (time: number) =>
+        signalAt(time, fingerWave, source.tremor, i * 1.7);
+      const isResting = resting && kind === 'fsr';
+
+      let value = isResting ? 0 : signalAtTime(t);
+      if (noise) {
+        value +=
+          (source.restOffsets?.[finger] ?? 0) +
+          (Math.random() * 2 - 1) * source.noise;
+      }
+      // Faults are off while calibrating so they don't skew the baseline.
+      if (fingerWave.fault && !isResting) {
+        value = applyFault(fingerWave.fault, value, t, signalAtTime);
+      }
 
       return [
         finger,

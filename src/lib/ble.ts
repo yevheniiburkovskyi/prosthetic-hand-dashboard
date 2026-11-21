@@ -36,3 +36,35 @@ export const SENSOR_CHARACTERISTICS: CharacteristicSpec[] = [
     }),
   },
 ];
+
+/**
+ * Write-only characteristic the app uses to send FSR corrections to the ESP
+ * (see docs/esp-calibration.md). Optional: older firmware without it falls
+ * back to filtering in the app.
+ */
+export const FSR_CALIBRATION_UUID = '6e3a1f52-8c4d-4b7a-9f21-3d5c8e7a1b90';
+
+/** Packet size of one finger's correction. */
+export const CALIBRATION_PACKET_BYTES = 7;
+
+/**
+ * One finger's correction, little-endian:
+ * [uint8 finger index][int16 offset][uint16 dead band][uint16 alpha × 1000]
+ * Alpha 1000 with offset 0 and dead band 0 disables correction.
+ */
+export const encodeCorrectionPacket = (
+  fingerIndex: number,
+  {
+    offset,
+    deadband,
+    alpha,
+  }: { offset: number; deadband: number; alpha: number }
+): ArrayBuffer => {
+  const buffer = new ArrayBuffer(CALIBRATION_PACKET_BYTES);
+  const view = new DataView(buffer);
+  view.setUint8(0, fingerIndex);
+  view.setInt16(1, offset, true);
+  view.setUint16(3, deadband, true);
+  view.setUint16(5, Math.round(alpha * 1000), true);
+  return buffer;
+};
