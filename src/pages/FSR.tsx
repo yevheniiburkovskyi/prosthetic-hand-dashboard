@@ -1,7 +1,7 @@
 import { Gauge } from 'lucide-react';
 import FsrOverview from '@/components/FsrOverview';
 import Header from '@/components/Header';
-import SensorCharts from '@/components/SensorCharts';
+import FsrMeasurement from '@/components/FsrMeasurement';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/Card';
 import { Progress } from '@/components/ui/progress';
@@ -15,8 +15,6 @@ import {
 import { getLevel, LEVEL_STYLES, type Level } from '@/lib/levels';
 import { cn } from '@/lib/utils';
 
-const Y_AXIS_DOMAIN = [0, MAX_FSR_VALUE];
-
 const LEVEL_LABELS: Record<Level, string> = {
   normal: 'Light',
   warning: 'Medium',
@@ -24,7 +22,7 @@ const LEVEL_LABELS: Record<Level, string> = {
 };
 
 const FSR = () => {
-  const { readings } = useBLEContext();
+  const { readings, isDemoMode } = useBLEContext();
 
   return (
     <>
@@ -68,13 +66,8 @@ const FSR = () => {
           })}
         </ul>
 
-        <SensorCharts
-          kind="fsr"
-          title="FSR sensors"
-          dataLabel="FSR"
-          yLabel="FSR Value"
-          yAxisDomain={Y_AXIS_DOMAIN}
-        />
+        {/* Remount on source change so demo and device data never mix. */}
+        <FsrMeasurement key={isDemoMode ? 'demo' : 'device'} />
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -34,6 +34,15 @@ interface ChartLineMultipleProps {
   yAxisDomain?: AxisDomain;
   toggleChartRunning?: () => void;
   isRunning?: boolean;
+  /** Sizing for the plot area; defaults to a tall single chart. */
+  chartClassName?: string;
+  showLegend?: boolean;
+  /** Rendered in the header, e.g. a status badge. */
+  badge?: ReactNode;
+  /** Recharts elements drawn inside the chart (ReferenceArea, …). */
+  overlays?: ReactNode;
+  /** Rendered below the chart. */
+  footer?: ReactNode;
 }
 
 const ChartLineMultiple = ({
@@ -50,6 +59,11 @@ const ChartLineMultiple = ({
   yAxisDomain,
   toggleChartRunning,
   isRunning,
+  chartClassName = 'h-[50vh] w-full',
+  showLegend = true,
+  badge,
+  overlays,
+  footer,
 }: ChartLineMultipleProps) => {
   return (
     <Card>
@@ -60,14 +74,17 @@ const ChartLineMultiple = ({
             <p className="text-sm text-neutral-500">{description}</p>
           )}
         </div>
-        {toggleChartRunning && (
-          <Button onClick={toggleChartRunning}>
-            {isRunning ? 'Pause' : 'Run'}
-            {isRunning ? <Pause /> : <Play />}
-          </Button>
-        )}
+        <div className="flex items-start gap-2">
+          {badge}
+          {toggleChartRunning && (
+            <Button onClick={toggleChartRunning}>
+              {isRunning ? 'Pause' : 'Run'}
+              {isRunning ? <Pause /> : <Play />}
+            </Button>
+          )}
+        </div>
       </div>
-      <ChartContainer config={config} className="h-[50vh] w-full">
+      <ChartContainer config={config} className={chartClassName}>
         <LineChart accessibilityLayer data={data}>
           <CartesianGrid />
           <XAxis
@@ -86,7 +103,7 @@ const ChartLineMultiple = ({
             label={{ value: yLabel, angle: -90, position: 'insideLeft' }}
             domain={yAxisDomain}
           />
-          <Legend verticalAlign="top" height={30} />
+          {showLegend && <Legend verticalAlign="top" height={30} />}
           <ChartTooltip cursor={false} />
           {Object.entries(config).map(([key, item]) => (
             <Line
@@ -100,8 +117,10 @@ const ChartLineMultiple = ({
               isAnimationActive={false}
             />
           ))}
+          {overlays}
         </LineChart>
       </ChartContainer>
+      {footer}
     </Card>
   );
 };

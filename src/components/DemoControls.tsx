@@ -100,7 +100,7 @@ const DemoControls = () => {
           <ToggleRow
             id="demo-noise"
             label="Sensor noise"
-            description="Random jitter and FSR resting offset"
+            description="Noisy sensors (above ±2% tolerance) and FSR resting offset"
             checked={demoSettings.noise}
             onCheckedChange={(noise) => updateDemoSettings({ noise })}
           />

@@ -1,23 +1,12 @@
 import type { AxisDomain } from 'recharts/types/util/types';
 import ChartLineMultiple from './ChartLineMultiple';
 import Logger from './Logger';
-import type { ChartConfig } from './ui/chart';
 import { useBLEContext } from '@/context/BLEContext';
 import type { ComponentProps } from 'react';
 import { useScrollingWindow } from '@/hooks/useScrollingWindow';
 import { CHART_WINDOW_SECONDS, useSensor } from '@/hooks/useSensor';
-import { FINGER_LABELS } from '@/lib/constants';
+import { FINGER_CHART_CONFIG, formatSecondsTick } from '@/lib/chartConfig';
 import type { SensorKind, SensorSample } from '@/types/sensorType';
-
-const chartConfig = {
-  thumb: { label: FINGER_LABELS.thumb, color: 'var(--chart-1)' },
-  index: { label: FINGER_LABELS.index, color: 'var(--chart-2)' },
-  middle: { label: FINGER_LABELS.middle, color: 'var(--chart-3)' },
-  ring: { label: FINGER_LABELS.ring, color: 'var(--chart-4)' },
-  pinky: { label: FINGER_LABELS.pinky, color: 'var(--chart-5)' },
-} satisfies ChartConfig;
-
-const formatSecondsTick = (value: number) => `${Math.round(value)}s`;
 
 interface Props {
   kind: SensorKind;
@@ -81,7 +70,7 @@ const SensorChartsContent = ({
   } = useSensor(kind);
 
   const sharedChartProps = {
-    config: chartConfig,
+    config: FINGER_CHART_CONFIG,
     xAxisKey: 'time',
     xLabel: 'Time (s)',
     yLabel,

@@ -70,4 +70,4 @@ const useSensor = (kind: SensorKind) => {
   };
 };
 
-export { useSensor, CHART_WINDOW_SECONDS };
+export { useSensor, toSample, CHART_WINDOW_SECONDS, CHART_BUFFER_SECONDS };

@@ -13,14 +13,40 @@ export const fsrProfiles: Record<DemoScenario, DemoProfile> = {
 
   /**
    * Fingers sit at different force levels so the cards cover the whole
-   * 0–MAX_FSR_VALUE range (Light / Medium / High) at once.
+   * 0–MAX_FSR_VALUE range (Light / Medium / High) at once. Each finger
+   * also has a measurement fault so signal analysis shows every verdict:
+   * thumb is clean (Stable), the others show deviations or errors.
    */
   states: {
     thumb: { center: 2400, swing: 900, period: 7, phase: 0 }, // 1500–3300
-    index: { center: 3300, swing: 650, period: 9, phase: 1.3 }, // 2650–3950
-    middle: { center: 1500, swing: 900, period: 6, phase: 2.6 }, // 600–2400
-    ring: { center: 450, swing: 500, period: 8, phase: 3.9 }, // 0–950
-    pinky: { center: 800, swing: 800, period: 11, phase: 5.2 }, // 0–1600
+    index: {
+      center: 3300,
+      swing: 650,
+      period: 9,
+      phase: 1.3,
+      fault: 'spikes',
+    }, // 2650–3950
+    middle: {
+      center: 1500,
+      swing: 900,
+      period: 6,
+      phase: 2.6,
+      fault: 'noisy',
+    }, // 600–2400
+    ring: {
+      center: 450,
+      swing: 500,
+      period: 8,
+      phase: 3.9,
+      fault: 'saturation',
+    }, // 0–950, ×5 → clips at max
+    pinky: {
+      center: 800,
+      swing: 800,
+      period: 11,
+      phase: 5.2,
+      fault: 'stuck',
+    }, // 0–1600, freezes 3 s of every 12 s
   },
 };
 
