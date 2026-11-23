@@ -1,3 +1,4 @@
+import type { CorrectionParams } from '@/lib/ble';
 import { SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
 import { SATURATION_LEVEL, TOLERANCE_PERCENT } from '@/lib/signalAnalysis';
 import type { SensorId, HandReadings } from '@/types/sensorType';
@@ -111,10 +112,10 @@ export const responseTimeMs = (alpha: number, sampleIntervalMs: number) =>
  * Stateful correction filter: offset → EMA → dead band. Saturated raw
  * readings pass through as the range maximum so clipping is never hidden.
  * This is the reference implementation the ESP firmware mirrors
- * (docs/esp-calibration.md).
+ * (docs/ble-protocol.md).
  */
 export const createCorrectionFilter = (
-  sensors: Record<SensorId, SensorCorrection>,
+  sensors: Record<SensorId, CorrectionParams>,
   range = MAX_FSR_VALUE
 ) => {
   const state: Partial<Record<SensorId, number>> = {};

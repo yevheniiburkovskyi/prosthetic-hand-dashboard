@@ -1,4 +1,11 @@
-import { Crosshair, Loader, RotateCcw, Sigma } from 'lucide-react';
+import {
+  Crosshair,
+  Loader,
+  Power,
+  PowerOff,
+  RotateCcw,
+  Sigma,
+} from 'lucide-react';
 import Card from './ui/Card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -21,26 +28,51 @@ const TARGET_LABELS: Record<CorrectionTarget, string> = {
   app: 'in the app (firmware has no calibration support yet)',
 };
 
+const MOTOR_INDICATOR: Record<
+  MotorStatus,
+  { label: string; box: string; dot: string }
+> = {
+  running: {
+    label: 'Motor running',
+    box: 'border-yellow-400 bg-yellow-50 text-yellow-800',
+    dot: 'animate-pulse bg-yellow-500',
+  },
+  stopped: {
+    label: 'Motor stopped',
+    box: 'border-neutral-300 bg-neutral-50 text-neutral-600',
+    dot: 'bg-neutral-400',
+  },
+  fault: {
+    label: 'Motor fault',
+    box: 'border-red-400 bg-red-50 text-red-700',
+    dot: 'bg-red-500',
+  },
+  unavailable: {
+    label: 'Motor not available',
+    box: 'border-dashed border-neutral-300 text-neutral-400',
+    dot: 'bg-neutral-300',
+  },
+};
+
+/** Shows the motor state as reported by the device. */
 const MotorIndicator = ({ status }: { status: MotorStatus }) => {
-  const isRunning = status === 'running';
+  const { label, box, dot } = MOTOR_INDICATOR[status];
   return (
     <span
       role="status"
       aria-live="polite"
+      title={
+        status === 'unavailable'
+          ? 'Connect a device whose firmware supports motor control'
+          : 'State reported by the device'
+      }
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium',
-        isRunning
-          ? 'border-yellow-400 bg-yellow-50 text-yellow-800'
-          : 'border-neutral-300 bg-neutral-50 text-neutral-600'
+        box
       )}
     >
-      <span
-        className={cn(
-          'size-2 rounded-full',
-          isRunning ? 'animate-pulse bg-yellow-500' : 'bg-neutral-400'
-        )}
-      />
-      {isRunning ? 'Motor running' : 'Motor stopped'}
+      <span className={cn('size-2 rounded-full', dot)} />
+      {label}
     </span>
   );
 };
@@ -118,8 +150,10 @@ const FsrOverview = () => {
     isDemoMode,
     fsrCalibration,
     isCalibratingFsr,
-    deviceSupportsCalibration,
+    capabilities,
     motorStatus,
+    isMotorCommandPending,
+    sendMotorCommand,
     calibrateFsr,
     resetFsrCalibration,
   } = useBLEContext();
@@ -128,7 +162,7 @@ const FsrOverview = () => {
   const hasDataSource = status === 'connected' || isDemoMode;
   const target: CorrectionTarget = isDemoMode
     ? 'demo-device'
-    : deviceSupportsCalibration
+    : capabilities.calibration
       ? 'device'
       : 'app';
 
@@ -202,6 +236,27 @@ const FsrOverview = () => {
             <Button variant="outline" onClick={resetFsrCalibration}>
               <RotateCcw />
               Reset
+            </Button>
+          )}
+          {capabilities.motor && (
+            <Button
+              variant="outline"
+              className="ml-auto"
+              disabled={isCalibratingFsr || isMotorCommandPending}
+              onClick={() =>
+                sendMotorCommand(
+                  motorStatus === 'running' ? 'motorStop' : 'motorStart'
+                )
+              }
+            >
+              {isMotorCommandPending ? (
+                <Loader className="animate-spin" />
+              ) : motorStatus === 'running' ? (
+                <PowerOff />
+              ) : (
+                <Power />
+              )}
+              {motorStatus === 'running' ? 'Stop motor' : 'Start motor'}
             </Button>
           )}
         </div>
