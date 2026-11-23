@@ -1,5 +1,5 @@
-import { FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
-import type { Finger, SensorSample } from '@/types/sensorType';
+import { SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
+import type { SensorId, SensorSample } from '@/types/sensorType';
 
 /** Allowed measurement error, in % of the sensor range. */
 export const TOLERANCE_PERCENT = 2;
@@ -58,7 +58,7 @@ export interface SessionReport {
   sampleCount: number;
   sampleRate: number;
   packetLossPercent: number;
-  channels: Record<Finger, ChannelReport>;
+  channels: Record<SensorId, ChannelReport>;
 }
 
 const median = (values: number[]): number => {
@@ -280,19 +280,19 @@ export const analyzeSession = (
   const timing = analyzeTiming(times);
 
   const channels = Object.fromEntries(
-    FINGERS.map((finger) => [
-      finger,
+    SENSORS.map((sensor) => [
+      sensor,
       analyzeChannel(
         times,
-        samples.map((s) => s[finger]),
+        samples.map((s) => s[sensor]),
         range
       ),
     ])
-  ) as Record<Finger, ChannelReport>;
+  ) as Record<SensorId, ChannelReport>;
 
   const allIssues = [
     ...timing.issues,
-    ...FINGERS.flatMap((f) => channels[f].issues),
+    ...SENSORS.flatMap((f) => channels[f].issues),
   ];
 
   return {

@@ -1,5 +1,5 @@
 import type { LevelThresholds } from '@/lib/levels';
-import type { Finger, HandReadings } from '@/types/sensorType';
+import type { SensorId, HandReadings } from '@/types/sensorType';
 
 /** °C: ≤40 Normal, 40–45 Warm, >45 High. */
 export const TEMPERATURE_THRESHOLDS: LevelThresholds = {
@@ -14,22 +14,17 @@ export const FSR_THRESHOLDS: LevelThresholds = {
 };
 export const MAX_FSR_VALUE = 4050;
 
-export const FINGERS = ['thumb', 'index', 'middle', 'ring', 'pinky'] as const;
+export const SENSORS = ['sensor1', 'sensor2', 'sensor3', 'sensor4'] as const;
 
-export const FINGER_LABELS: Record<Finger, string> = {
-  thumb: 'Thumb',
-  index: 'Index',
-  middle: 'Middle',
-  ring: 'Ring',
-  pinky: 'Pinky',
+export const SENSOR_LABELS: Record<SensorId, string> = {
+  sensor1: 'Sensor 1',
+  sensor2: 'Sensor 2',
+  sensor3: 'Sensor 3',
+  sensor4: 'Sensor 4',
 };
 
 const EMPTY_READING = { value: 0, timestamp: 0 };
 
-export const EMPTY_READINGS: HandReadings = {
-  thumb: EMPTY_READING,
-  index: EMPTY_READING,
-  middle: EMPTY_READING,
-  ring: EMPTY_READING,
-  pinky: EMPTY_READING,
-};
+export const EMPTY_READINGS = Object.fromEntries(
+  SENSORS.map((sensor) => [sensor, EMPTY_READING])
+) as HandReadings;

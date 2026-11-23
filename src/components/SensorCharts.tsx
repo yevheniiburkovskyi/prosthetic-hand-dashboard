@@ -5,7 +5,7 @@ import { useBLEContext } from '@/context/BLEContext';
 import type { ComponentProps } from 'react';
 import { useScrollingWindow } from '@/hooks/useScrollingWindow';
 import { CHART_WINDOW_SECONDS, useSensor } from '@/hooks/useSensor';
-import { FINGER_CHART_CONFIG, formatSecondsTick } from '@/lib/chartConfig';
+import { SENSOR_CHART_CONFIG, formatSecondsTick } from '@/lib/chartConfig';
 import type { SensorKind, SensorSample } from '@/types/sensorType';
 
 interface Props {
@@ -70,7 +70,7 @@ const SensorChartsContent = ({
   } = useSensor(kind);
 
   const sharedChartProps = {
-    config: FINGER_CHART_CONFIG,
+    config: SENSOR_CHART_CONFIG,
     xAxisKey: 'time',
     xLabel: 'Time (s)',
     yLabel,

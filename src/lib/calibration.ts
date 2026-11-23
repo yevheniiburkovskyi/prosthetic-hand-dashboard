@@ -1,6 +1,6 @@
-import { FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
+import { SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
 import { SATURATION_LEVEL, TOLERANCE_PERCENT } from '@/lib/signalAnalysis';
-import type { Finger, HandReadings } from '@/types/sensorType';
+import type { SensorId, HandReadings } from '@/types/sensorType';
 
 /** How long to sample the unloaded sensors when calibrating. */
 export const CALIBRATION_DURATION_MS = 3000;
@@ -19,7 +19,7 @@ const MIN_DEADBAND = 5;
  * Per-sensor correction. Applied in this order (on the ESP, or in the app as
  * a fallback): subtract offset → EMA filter → subtract dead band, clamp ≥ 0.
  */
-export interface FingerCorrection {
+export interface SensorCorrection {
   /** Mean reading with no load. */
   offset: number;
   /** EMA weight of the newest sample, 0 < alpha ≤ 1 (1 = no smoothing). */
@@ -35,7 +35,7 @@ export interface FingerCorrection {
 export type CorrectionTarget = 'device' | 'demo-device' | 'app';
 
 export interface Calibration {
-  fingers: Record<Finger, FingerCorrection>;
+  sensors: Record<SensorId, SensorCorrection>;
   calibratedAt: number;
   /** Typical time between samples during calibration, ms. */
   sampleIntervalMs: number;
@@ -67,7 +67,7 @@ export const computeCalibration = (
 ): Omit<Calibration, 'appliedOn'> => {
   const targetStd = ((TARGET_NOISE_PERCENT / 100) * range) / 2;
   const timestamps = samples.map((s) =>
-    Math.max(...FINGERS.map((f) => s[f].timestamp))
+    Math.max(...SENSORS.map((f) => s[f].timestamp))
   );
   const intervals = timestamps
     .slice(1)
@@ -77,9 +77,9 @@ export const computeCalibration = (
   return {
     calibratedAt: Date.now(),
     sampleIntervalMs: median(intervals) || 100,
-    fingers: Object.fromEntries(
-      FINGERS.map((finger) => {
-        const values = samples.map((sample) => sample[finger].value);
+    sensors: Object.fromEntries(
+      SENSORS.map((sensor) => {
+        const values = samples.map((sample) => sample[sensor].value);
         const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
         const std = Math.sqrt(
           values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length
@@ -87,7 +87,7 @@ export const computeCalibration = (
         const alpha = alphaFor(std, targetStd);
         const stdAfter = std * emaNoiseFactor(alpha);
 
-        const correction: FingerCorrection = {
+        const correction: SensorCorrection = {
           offset: Math.round(mean),
           alpha: Math.round(alpha * 1000) / 1000,
           deadband: Math.max(
@@ -97,9 +97,9 @@ export const computeCalibration = (
           noiseBeforePercent: noisePercent(std, range),
           noiseAfterPercent: noisePercent(stdAfter, range),
         };
-        return [finger, correction];
+        return [sensor, correction];
       })
-    ) as Record<Finger, FingerCorrection>,
+    ) as Record<SensorId, SensorCorrection>,
   };
 };
 
@@ -114,29 +114,29 @@ export const responseTimeMs = (alpha: number, sampleIntervalMs: number) =>
  * (docs/esp-calibration.md).
  */
 export const createCorrectionFilter = (
-  fingers: Record<Finger, FingerCorrection>,
+  sensors: Record<SensorId, SensorCorrection>,
   range = MAX_FSR_VALUE
 ) => {
-  const state: Partial<Record<Finger, number>> = {};
+  const state: Partial<Record<SensorId, number>> = {};
   const saturation = range * SATURATION_LEVEL;
 
   return (readings: HandReadings): HandReadings =>
     Object.fromEntries(
-      FINGERS.map((finger) => {
-        const { offset, alpha, deadband } = fingers[finger];
-        const raw = readings[finger].value;
+      SENSORS.map((sensor) => {
+        const { offset, alpha, deadband } = sensors[sensor];
+        const raw = readings[sensor].value;
         const input = raw - offset;
-        const previous = state[finger];
+        const previous = state[sensor];
         const filtered =
           previous === undefined
             ? input
             : previous + alpha * (input - previous);
-        state[finger] = filtered;
+        state[sensor] = filtered;
 
         return [
-          finger,
+          sensor,
           {
-            ...readings[finger],
+            ...readings[sensor],
             value:
               raw >= saturation
                 ? range

@@ -1,4 +1,4 @@
-import type { Finger, SensorKind, SensorReading } from '@/types/sensorType';
+import type { SensorId, SensorKind, SensorReading } from '@/types/sensorType';
 
 export const BLE_DEVICE_NAME = 'Prosthetic-Hand';
 export const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
@@ -6,7 +6,7 @@ export const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 interface CharacteristicSpec {
   uuid: string;
   kind: SensorKind;
-  finger: Finger;
+  sensor: SensorId;
   parse: (data: DataView) => SensorReading;
 }
 
@@ -19,7 +19,7 @@ export const SENSOR_CHARACTERISTICS: CharacteristicSpec[] = [
     // [uint32 timestamp][float32 °C]
     uuid: '1c95d5d3-d300-4172-bc4a-bf2436f6d532',
     kind: 'temperature',
-    finger: 'thumb',
+    sensor: 'sensor1',
     parse: (data) => ({
       timestamp: data.getUint32(0, true),
       value: Math.round(data.getFloat32(4, true) * 10) / 10,
@@ -29,7 +29,7 @@ export const SENSOR_CHARACTERISTICS: CharacteristicSpec[] = [
     // [uint32 timestamp][uint16 raw ADC value]
     uuid: 'beb5483e-36e1-4688-b7f5-ea07361b26a8',
     kind: 'fsr',
-    finger: 'thumb',
+    sensor: 'sensor1',
     parse: (data) => ({
       timestamp: data.getUint32(0, true),
       value: data.getUint16(4, true),
@@ -44,16 +44,16 @@ export const SENSOR_CHARACTERISTICS: CharacteristicSpec[] = [
  */
 export const FSR_CALIBRATION_UUID = '6e3a1f52-8c4d-4b7a-9f21-3d5c8e7a1b90';
 
-/** Packet size of one finger's correction. */
+/** Packet size of one sensor's correction. */
 export const CALIBRATION_PACKET_BYTES = 7;
 
 /**
- * One finger's correction, little-endian:
- * [uint8 finger index][int16 offset][uint16 dead band][uint16 alpha × 1000]
+ * One sensor's correction, little-endian:
+ * [uint8 sensor index][int16 offset][uint16 dead band][uint16 alpha × 1000]
  * Alpha 1000 with offset 0 and dead band 0 disables correction.
  */
 export const encodeCorrectionPacket = (
-  fingerIndex: number,
+  sensorIndex: number,
   {
     offset,
     deadband,
@@ -62,7 +62,7 @@ export const encodeCorrectionPacket = (
 ): ArrayBuffer => {
   const buffer = new ArrayBuffer(CALIBRATION_PACKET_BYTES);
   const view = new DataView(buffer);
-  view.setUint8(0, fingerIndex);
+  view.setUint8(0, sensorIndex);
   view.setInt16(1, offset, true);
   view.setUint16(3, deadband, true);
   view.setUint16(5, Math.round(alpha * 1000), true);

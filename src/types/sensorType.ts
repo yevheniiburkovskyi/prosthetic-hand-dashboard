@@ -1,6 +1,6 @@
-import type { FINGERS } from '@/lib/constants';
+import type { SENSORS } from '@/lib/constants';
 
-export type Finger = (typeof FINGERS)[number];
+export type SensorId = (typeof SENSORS)[number];
 
 export type SensorKind = 'temperature' | 'fsr';
 
@@ -10,7 +10,7 @@ export interface SensorReading {
   timestamp: number;
 }
 
-export type HandReadings = Record<Finger, SensorReading>;
+export type HandReadings = Record<SensorId, SensorReading>;
 
-/** One chart / log row: time in seconds plus one value per finger. */
-export type SensorSample = { time: number } & Record<Finger, number>;
+/** One chart / log row: time in seconds plus one value per sensor. */
+export type SensorSample = { time: number } & Record<SensorId, number>;
