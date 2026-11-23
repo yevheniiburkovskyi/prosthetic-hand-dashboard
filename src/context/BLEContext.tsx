@@ -1,10 +1,18 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
   BLE_DEVICE_NAME,
+  CALIBRATION_UUID,
+  CONTROL_UUID,
+  encodeCommand,
   encodeCorrectionPacket,
-  FSR_CALIBRATION_UUID,
-  SENSOR_CHARACTERISTICS,
+  NO_CORRECTION,
+  parseMotorStatus,
+  parseSensorPacket,
+  SENSOR_DATA_UUIDS,
   SERVICE_UUID,
+  type Command,
+  type CorrectionParams,
+  type MotorState,
 } from '@/lib/ble';
 import {
   CALIBRATION_DURATION_MS,
@@ -13,17 +21,11 @@ import {
   MIN_CALIBRATION_SAMPLES,
   type Calibration,
   type CorrectionTarget,
-  type SensorCorrection,
 } from '@/lib/calibration';
 import { EMPTY_READINGS, SENSORS } from '@/lib/constants';
-import {
-  DEFAULT_DEMO_SETTINGS,
-  DEMO_INTERVAL_MS,
-  getDemoReadings,
-  isDemoPacketDropped,
-  type DemoSettings,
-} from '@/lib/demo';
-import type { SensorId, HandReadings, SensorKind } from '@/types/sensorType';
+import { DEFAULT_DEMO_SETTINGS, type DemoSettings } from '@/lib/demo';
+import { createDemoDevice } from '@/lib/demoDevice';
+import type { HandReadings, SensorId, SensorKind } from '@/types/sensorType';
 import {
   createContext,
   useCallback,
@@ -37,7 +39,14 @@ import {
 import { toast } from 'sonner';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
-export type MotorStatus = 'stopped' | 'running';
+/** Motor state reported by the device, or 'unavailable' without support. */
+export type MotorStatus = MotorState | 'unavailable';
+
+/** What the connected device (real or demo) can do beyond streaming data. */
+export interface DeviceCapabilities {
+  calibration: boolean;
+  motor: boolean;
+}
 
 type AllReadings = Record<SensorKind, HandReadings>;
 type ReadingsListener = (readings: HandReadings) => void;
@@ -50,29 +59,48 @@ interface BLEContextType {
   disconnect: () => void;
   /** Called once per BLE notification; returns an unsubscribe function. */
   subscribe: (kind: SensorKind, listener: ReadingsListener) => () => void;
-  /** When on, readings come from replayed mock data instead of a device. */
+  /** When on, data comes from a simulated device instead of BLE. */
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
   /** Demo scenario and noise simulation; persisted across reloads. */
   demoSettings: DemoSettings;
   updateDemoSettings: (patch: Partial<DemoSettings>) => void;
+  capabilities: DeviceCapabilities;
   /** Active FSR correction (offset, filter, dead band), if any. */
   fsrCalibration: Calibration | null;
   isCalibratingFsr: boolean;
-  /** Connected firmware accepts corrections over BLE. */
-  deviceSupportsCalibration: boolean;
-  /** Calibration motor; runs while calibration measures the sensors. */
-  motorStatus: MotorStatus;
   /**
-   * Measures FSR noise at rest, computes a per-sensor correction and sends it
-   * to the device (or applies it in the app if the firmware can't take it).
+   * Runs the motor (if supported), measures FSR noise at rest, computes a
+   * per-sensor correction and sends it to the device (or applies it in the
+   * app if the firmware can't take it).
    */
   calibrateFsr: () => Promise<void>;
   resetFsrCalibration: () => void;
+  motorStatus: MotorStatus;
+  isMotorCommandPending: boolean;
+  /** Sends a motor command and resolves once the device confirms it. */
+  sendMotorCommand: (command: Command) => Promise<boolean>;
+}
+
+/** Writes to the connected device; a missing method = not supported. */
+interface DeviceLink {
+  writeCalibration?: (packet: ArrayBuffer) => Promise<void>;
+  writeControl?: (packet: ArrayBuffer) => Promise<void>;
 }
 
 const DEMO_MODE_STORAGE_KEY = 'demoMode';
 const DEMO_SETTINGS_STORAGE_KEY = 'demoSettings';
+/** How long to wait for the device to confirm a motor command. */
+const MOTOR_CONFIRM_TIMEOUT_MS = 2000;
+
+const NO_CAPABILITIES: DeviceCapabilities = {
+  calibration: false,
+  motor: false,
+};
+const DEMO_CAPABILITIES: DeviceCapabilities = {
+  calibration: true,
+  motor: true,
+};
 
 const loadDemoSettings = (): DemoSettings => {
   try {
@@ -88,29 +116,30 @@ const loadDemoSettings = (): DemoSettings => {
   }
 };
 
-type CorrectionParams = Pick<SensorCorrection, 'offset' | 'deadband' | 'alpha'>;
-const NO_CORRECTION: CorrectionParams = { offset: 0, deadband: 0, alpha: 1 };
+const NO_CORRECTIONS = Object.fromEntries(
+  SENSORS.map((sensor) => [sensor, NO_CORRECTION])
+) as Record<SensorId, CorrectionParams>;
 
 const writeCorrections = async (
-  characteristic: BluetoothRemoteGATTCharacteristic,
+  write: (packet: ArrayBuffer) => Promise<void>,
   corrections: Record<SensorId, CorrectionParams>
 ) => {
   // One small write per sensor keeps packets within the default BLE MTU.
   for (const [index, sensor] of SENSORS.entries()) {
-    await characteristic.writeValueWithResponse(
-      encodeCorrectionPacket(index, corrections[sensor])
-    );
+    await write(encodeCorrectionPacket(index, corrections[sensor]));
   }
 };
-
-const NO_CORRECTIONS = Object.fromEntries(
-  SENSORS.map((f) => [f, NO_CORRECTION])
-) as Record<SensorId, CorrectionParams>;
 
 const APPLIED_MESSAGES: Record<CorrectionTarget, string> = {
   device: 'Calibration sent to the device.',
   'demo-device': 'Calibration sent to the demo device.',
   app: 'Calibration applied in the app (firmware does not support remote calibration yet).',
+};
+
+const MOTOR_MESSAGES: Record<MotorState, string> = {
+  running: 'Motor started',
+  stopped: 'Motor stopped',
+  fault: 'Motor fault reported by the device',
 };
 
 const EMPTY_ALL_READINGS: AllReadings = {
@@ -129,32 +158,40 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
   const [demoSettings, setDemoSettings] = useState(loadDemoSettings);
   const demoSettingsRef = useRef(demoSettings);
 
+  const [bleCapabilities, setBleCapabilities] =
+    useState<DeviceCapabilities>(NO_CAPABILITIES);
   const [fsrCalibration, setFsrCalibration] = useState<Calibration | null>(
     null
   );
   const [isCalibratingFsr, setIsCalibratingFsr] = useState(false);
-  const [deviceSupportsCalibration, setDeviceSupportsCalibration] =
-    useState(false);
-  const [motorStatus, setMotorStatus] = useState<MotorStatus>('stopped');
+  const [reportedMotor, setReportedMotor] = useState<MotorState | null>(null);
+  const [isMotorCommandPending, setIsMotorCommandPending] = useState(false);
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
+  const linkRef = useRef<DeviceLink | null>(null);
   const isManualDisconnectRef = useRef(false);
-  /** Uncalibrated readings as received from the device / demo. */
+  /** Uncalibrated readings as received from the device. */
   const rawReadingsRef = useRef<AllReadings>(EMPTY_ALL_READINGS);
-  type CorrectionFilter = (readings: HandReadings) => HandReadings;
   /** Fallback when the firmware can't apply corrections itself. */
-  const appFilterRef = useRef<CorrectionFilter | null>(null);
-  /** Stands in for firmware-side filtering in demo mode. */
-  const demoDeviceFilterRef = useRef<CorrectionFilter | null>(null);
-  const calibrationCharRef = useRef<BluetoothRemoteGATTCharacteristic | null>(
-    null
-  );
+  const appFilterRef = useRef<
+    ((readings: HandReadings) => HandReadings) | null
+  >(null);
   /** Collects raw FSR samples while a calibration is running. */
   const calibrationSamplesRef = useRef<HandReadings[] | null>(null);
+  /** Pending motor command waiting for the device's status confirmation. */
+  const motorWaiterRef = useRef<{
+    target: MotorState;
+    resolve: (state: MotorState | null) => void;
+  } | null>(null);
   const listenersRef = useRef<Record<SensorKind, Set<ReadingsListener>>>({
     temperature: new Set(),
     fsr: new Set(),
   });
+
+  const capabilities = isDemoMode ? DEMO_CAPABILITIES : bleCapabilities;
+  const motorStatus: MotorStatus = capabilities.motor
+    ? (reportedMotor ?? 'stopped')
+    : 'unavailable';
 
   const publish = useCallback(
     (kind: SensorKind, update: Partial<HandReadings>) => {
@@ -173,20 +210,97 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     []
   );
 
+  const handleSensorPacket = useCallback(
+    (kind: SensorKind, data: DataView) => {
+      const update = parseSensorPacket(kind, data);
+      if (update) publish(kind, update);
+    },
+    [publish]
+  );
+
+  const handleStatusPacket = useCallback((data: DataView) => {
+    const state = parseMotorStatus(data);
+    if (!state) return;
+    setReportedMotor(state);
+
+    const waiter = motorWaiterRef.current;
+    if (waiter && (state === waiter.target || state === 'fault')) {
+      motorWaiterRef.current = null;
+      waiter.resolve(state);
+    } else if (state === 'fault') {
+      toast.error(MOTOR_MESSAGES.fault);
+    }
+  }, []);
+
+  const cancelMotorWaiter = () => {
+    motorWaiterRef.current?.resolve(null);
+    motorWaiterRef.current = null;
+  };
+
+  const sendMotorCommand = useCallback(async (command: Command) => {
+    const writeControl = linkRef.current?.writeControl;
+    if (!writeControl) return false;
+
+    const target: MotorState = command === 'motorStart' ? 'running' : 'stopped';
+    setIsMotorCommandPending(true);
+
+    // Register before writing so a fast confirmation isn't missed.
+    motorWaiterRef.current?.resolve(null);
+    const confirmation = new Promise<MotorState | null>((resolve) => {
+      const timer = setTimeout(() => {
+        motorWaiterRef.current = null;
+        resolve(null);
+      }, MOTOR_CONFIRM_TIMEOUT_MS);
+      motorWaiterRef.current = {
+        target,
+        resolve: (state) => {
+          clearTimeout(timer);
+          resolve(state);
+        },
+      };
+    });
+
+    try {
+      await writeControl(encodeCommand(command));
+      const state = await confirmation;
+
+      if (state === target) {
+        toast.info(MOTOR_MESSAGES[target]);
+        return true;
+      }
+      if (state === 'fault') {
+        toast.error(MOTOR_MESSAGES.fault);
+      } else {
+        toast.warning(
+          `The device did not confirm motor ${target === 'running' ? 'start' : 'stop'}.`
+        );
+      }
+      return false;
+    } catch (error) {
+      motorWaiterRef.current?.resolve(null);
+      motorWaiterRef.current = null;
+      console.error('Motor command failed:', error);
+      toast.error('Failed to send the motor command.');
+      return false;
+    } finally {
+      setIsMotorCommandPending(false);
+    }
+  }, []);
+
   const resetReadings = useCallback(() => {
     rawReadingsRef.current = EMPTY_ALL_READINGS;
     setReadings(EMPTY_ALL_READINGS);
   }, []);
 
-  /** Removes any active correction from the app, demo device and firmware. */
+  /** Removes any active correction from the app and the device. */
   const clearCorrection = useCallback(async () => {
     appFilterRef.current = null;
-    demoDeviceFilterRef.current = null;
     setFsrCalibration(null);
 
-    if (calibrationCharRef.current) {
+    const writeCalibration = linkRef.current?.writeCalibration;
+    if (writeCalibration) {
       try {
-        await writeCorrections(calibrationCharRef.current, NO_CORRECTIONS);
+        await writeCorrections(writeCalibration, NO_CORRECTIONS);
       } catch (error) {
         console.error('Failed to reset device calibration:', error);
       }
@@ -203,21 +317,20 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     // Measure the sensors' own noise, not an earlier correction's output.
     await clearCorrection();
 
+    const hasMotor = Boolean(linkRef.current?.writeControl);
     const samples: HandReadings[] = [];
     calibrationSamplesRef.current = samples;
     setIsCalibratingFsr(true);
-    setMotorStatus('running');
-    toast.info('Motor started');
 
     try {
+      if (hasMotor) await sendMotorCommand('motorStart');
       await new Promise((resolve) =>
         setTimeout(resolve, CALIBRATION_DURATION_MS)
       );
     } finally {
       calibrationSamplesRef.current = null;
+      if (hasMotor) await sendMotorCommand('motorStop');
       setIsCalibratingFsr(false);
-      setMotorStatus('stopped');
-      toast.info('Motor stopped');
     }
 
     if (samples.length < MIN_CALIBRATION_SAMPLES) {
@@ -228,15 +341,13 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const calibration = computeCalibration(samples);
+    const writeCalibration = linkRef.current?.writeCalibration;
     let appliedOn: CorrectionTarget = 'app';
 
-    if (isDemoMode) {
-      demoDeviceFilterRef.current = createCorrectionFilter(calibration.sensors);
-      appliedOn = 'demo-device';
-    } else if (calibrationCharRef.current) {
+    if (writeCalibration) {
       try {
-        await writeCorrections(calibrationCharRef.current, calibration.sensors);
-        appliedOn = 'device';
+        await writeCorrections(writeCalibration, calibration.sensors);
+        appliedOn = isDemoMode ? 'demo-device' : 'device';
       } catch (error) {
         console.error('Failed to send calibration:', error);
         toast.warning('Could not send calibration to the device.');
@@ -249,7 +360,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
 
     setFsrCalibration({ ...calibration, appliedOn });
     toast.success(APPLIED_MESSAGES[appliedOn]);
-  }, [clearCorrection, isDemoMode]);
+  }, [clearCorrection, isDemoMode, sendMotorCommand]);
 
   const setDemoMode = useCallback(
     (enabled: boolean) => {
@@ -257,6 +368,8 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       resetReadings();
       // A calibration belongs to the source it was measured on.
       resetFsrCalibration();
+      cancelMotorWaiter();
+      setReportedMotor(null);
       setIsDemoMode(enabled);
     },
     [resetReadings, resetFsrCalibration]
@@ -278,36 +391,37 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     [resetFsrCalibration]
   );
 
-  // Demo mode replays mock data through the same publish path as real BLE.
-  // Settings are read from a ref so changing them keeps the demo clock
-  // (and therefore chart/log timestamps) continuous.
+  // Demo mode runs a virtual ESP that speaks the real byte-level protocol,
+  // so the same parsing, calibration and motor code paths are exercised.
   useEffect(() => {
     if (!isDemoMode) return;
 
-    const startedAt = performance.now();
-    const id = setInterval(() => {
-      const elapsed = performance.now() - startedAt;
-      const settings = demoSettingsRef.current;
-      // While calibrating, simulate a relaxed hand like a real user would.
-      const resting = calibrationSamplesRef.current !== null;
-      publish('temperature', getDemoReadings('temperature', elapsed, settings));
-      const fsr = getDemoReadings('fsr', elapsed, settings, { resting });
-      // The simulated firmware filters every sample, even ones it fails to send.
-      const deviceOutput = demoDeviceFilterRef.current?.(fsr) ?? fsr;
-      if (!isDemoPacketDropped('fsr', elapsed, settings)) {
-        publish('fsr', deviceOutput);
-      }
-    }, DEMO_INTERVAL_MS);
+    const device = createDemoDevice({
+      getSettings: () => demoSettingsRef.current,
+      isResting: () => calibrationSamplesRef.current !== null,
+      onSensorPacket: handleSensorPacket,
+      onStatusPacket: handleStatusPacket,
+    });
+    const link: DeviceLink = {
+      writeCalibration: device.writeCalibration,
+      writeControl: device.writeControl,
+    };
+    linkRef.current = link;
 
-    return () => clearInterval(id);
-  }, [isDemoMode, publish]);
+    return () => {
+      device.dispose();
+      if (linkRef.current === link) linkRef.current = null;
+    };
+  }, [isDemoMode, handleSensorPacket, handleStatusPacket]);
 
   const handleDisconnected = useCallback(() => {
     deviceRef.current = null;
-    calibrationCharRef.current = null;
+    linkRef.current = null;
     appFilterRef.current = null;
+    cancelMotorWaiter();
     setFsrCalibration(null);
-    setDeviceSupportsCalibration(false);
+    setBleCapabilities(NO_CAPABILITIES);
+    setReportedMotor(null);
     resetReadings();
     setStatus('disconnected');
 
@@ -346,12 +460,15 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       const service = await server.getPrimaryService(SERVICE_UUID);
 
       // A missing characteristic should not take the whole connection down.
+      const kinds = Object.keys(SENSOR_DATA_UUIDS) as SensorKind[];
       const results = await Promise.allSettled(
-        SENSOR_CHARACTERISTICS.map(async ({ uuid, kind, sensor, parse }) => {
-          const characteristic = await service.getCharacteristic(uuid);
+        kinds.map(async (kind) => {
+          const characteristic = await service.getCharacteristic(
+            SENSOR_DATA_UUIDS[kind]
+          );
           characteristic.addEventListener('characteristicvaluechanged', () => {
             if (characteristic.value) {
-              publish(kind, { [sensor]: parse(characteristic.value) });
+              handleSensorPacket(kind, characteristic.value);
             }
           });
           await characteristic.startNotifications();
@@ -360,31 +477,53 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
 
       results.forEach((result, i) => {
         if (result.status === 'rejected') {
-          const { kind, uuid } = SENSOR_CHARACTERISTICS[i];
-          console.error(
-            `Subscription error (${kind}, ${uuid}):`,
-            result.reason
-          );
+          console.error(`Subscription error (${kinds[i]}):`, result.reason);
           toast.error(
-            `Failed to subscribe to ${kind} sensor: ${result.reason}`
+            `Failed to subscribe to ${kinds[i]} sensors: ${result.reason}`
           );
         }
       });
 
-      // Optional: firmware that can apply FSR corrections itself.
-      calibrationCharRef.current = await service
-        .getCharacteristic(FSR_CALIBRATION_UUID)
+      // Optional characteristics: older firmware may not have them.
+      const calibrationChar = await service
+        .getCharacteristic(CALIBRATION_UUID)
         .catch(() => null);
-      if (calibrationCharRef.current) {
+      const controlChar = await service
+        .getCharacteristic(CONTROL_UUID)
+        .catch(() => null);
+
+      if (controlChar) {
+        controlChar.addEventListener('characteristicvaluechanged', () => {
+          if (controlChar.value) handleStatusPacket(controlChar.value);
+        });
+        try {
+          await controlChar.startNotifications();
+          handleStatusPacket(await controlChar.readValue());
+        } catch (error) {
+          console.error('Failed to read device status:', error);
+        }
+      }
+
+      const link: DeviceLink = {
+        writeCalibration: calibrationChar
+          ? (packet) => calibrationChar.writeValueWithResponse(packet)
+          : undefined,
+        writeControl: controlChar
+          ? (packet) => controlChar.writeValueWithResponse(packet)
+          : undefined,
+      };
+      linkRef.current = link;
+
+      if (link.writeCalibration) {
         // Start from a known state: no correction on the device.
-        await writeCorrections(
-          calibrationCharRef.current,
-          NO_CORRECTIONS
-        ).catch((error) =>
-          console.error('Failed to reset device calibration:', error)
+        await writeCorrections(link.writeCalibration, NO_CORRECTIONS).catch(
+          (error) => console.error('Failed to reset device calibration:', error)
         );
       }
-      setDeviceSupportsCalibration(calibrationCharRef.current !== null);
+      setBleCapabilities({
+        calibration: Boolean(calibrationChar),
+        motor: Boolean(controlChar),
+      });
 
       device.addEventListener('gattserverdisconnected', handleDisconnected, {
         once: true,
@@ -393,6 +532,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       setStatus('connected');
       toast.success(`Connected to BLE device: "${device.name}"`);
     } catch (error) {
+      linkRef.current = null;
       device?.gatt?.disconnect();
       setStatus('disconnected');
 
@@ -405,7 +545,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       console.error('BLE connection error:', error);
       toast.error(`Failed to connect to BLE device: ${error}`);
     }
-  }, [handleDisconnected, publish]);
+  }, [handleDisconnected, handleSensorPacket, handleStatusPacket]);
 
   const disconnect = useCallback(() => {
     if (!deviceRef.current?.gatt) return;
@@ -437,16 +577,16 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       setDemoMode,
       demoSettings,
       updateDemoSettings,
+      capabilities,
       fsrCalibration,
       isCalibratingFsr,
-      deviceSupportsCalibration,
-      motorStatus,
       calibrateFsr,
       resetFsrCalibration,
+      motorStatus,
+      isMotorCommandPending,
+      sendMotorCommand,
     }),
     [
-      demoSettings,
-      updateDemoSettings,
       status,
       readings,
       connect,
@@ -454,12 +594,16 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       subscribe,
       isDemoMode,
       setDemoMode,
+      demoSettings,
+      updateDemoSettings,
+      capabilities,
       fsrCalibration,
       isCalibratingFsr,
-      deviceSupportsCalibration,
-      motorStatus,
       calibrateFsr,
       resetFsrCalibration,
+      motorStatus,
+      isMotorCommandPending,
+      sendMotorCommand,
     ]
   );
 
