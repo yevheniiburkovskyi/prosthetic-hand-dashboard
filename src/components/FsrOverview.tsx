@@ -3,22 +3,46 @@ import Card from './ui/Card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
-import { useBLEContext } from '@/context/BLEContext';
+import { useBLEContext, type MotorStatus } from '@/context/BLEContext';
 import {
   responseTimeMs,
   type Calibration,
   type CorrectionTarget,
 } from '@/lib/calibration';
-import { FINGER_LABELS, FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
+import { SENSOR_LABELS, SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
 import { TOLERANCE_PERCENT } from '@/lib/signalAnalysis';
 import { cn } from '@/lib/utils';
 
-const MAX_TOTAL_PRESSURE = MAX_FSR_VALUE * FINGERS.length;
+const MAX_TOTAL_PRESSURE = MAX_FSR_VALUE * SENSORS.length;
 
 const TARGET_LABELS: Record<CorrectionTarget, string> = {
   device: 'on the device',
   'demo-device': 'on the demo device',
   app: 'in the app (firmware has no calibration support yet)',
+};
+
+const MotorIndicator = ({ status }: { status: MotorStatus }) => {
+  const isRunning = status === 'running';
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium',
+        isRunning
+          ? 'border-yellow-400 bg-yellow-50 text-yellow-800'
+          : 'border-neutral-300 bg-neutral-50 text-neutral-600'
+      )}
+    >
+      <span
+        className={cn(
+          'size-2 rounded-full',
+          isRunning ? 'animate-pulse bg-yellow-500' : 'bg-neutral-400'
+        )}
+      />
+      {isRunning ? 'Motor running' : 'Motor stopped'}
+    </span>
+  );
 };
 
 const NoiseValue = ({ percent }: { percent: number }) => (
@@ -33,8 +57,8 @@ const NoiseValue = ({ percent }: { percent: number }) => (
 );
 
 const CalibrationResult = ({ calibration }: { calibration: Calibration }) => {
-  const isStable = FINGERS.every(
-    (f) => calibration.fingers[f].noiseAfterPercent <= TOLERANCE_PERCENT
+  const isStable = SENSORS.every(
+    (f) => calibration.sensors[f].noiseAfterPercent <= TOLERANCE_PERCENT
   );
 
   return (
@@ -60,15 +84,15 @@ const CalibrationResult = ({ calibration }: { calibration: Calibration }) => {
           </tr>
         </thead>
         <tbody>
-          {FINGERS.map((finger) => {
-            const c = calibration.fingers[finger];
+          {SENSORS.map((sensor) => {
+            const c = calibration.sensors[sensor];
             const response = responseTimeMs(
               c.alpha,
               calibration.sampleIntervalMs
             );
             return (
-              <tr key={finger}>
-                <td>{FINGER_LABELS[finger]}</td>
+              <tr key={sensor}>
+                <td>{SENSOR_LABELS[sensor]}</td>
                 <td>
                   <NoiseValue percent={c.noiseBeforePercent} />
                 </td>
@@ -86,7 +110,7 @@ const CalibrationResult = ({ calibration }: { calibration: Calibration }) => {
   );
 };
 
-/** Total pressure across all fingers plus the FSR calibration loop. */
+/** Total pressure across all sensors plus the FSR calibration loop. */
 const FsrOverview = () => {
   const {
     readings,
@@ -95,11 +119,12 @@ const FsrOverview = () => {
     fsrCalibration,
     isCalibratingFsr,
     deviceSupportsCalibration,
+    motorStatus,
     calibrateFsr,
     resetFsrCalibration,
   } = useBLEContext();
 
-  const total = FINGERS.reduce((sum, f) => sum + readings.fsr[f].value, 0);
+  const total = SENSORS.reduce((sum, f) => sum + readings.fsr[f].value, 0);
   const hasDataSource = status === 'connected' || isDemoMode;
   const target: CorrectionTarget = isDemoMode
     ? 'demo-device'
@@ -121,7 +146,9 @@ const FsrOverview = () => {
           </span>
         </p>
         <Progress value={(total / MAX_TOTAL_PRESSURE) * 100} />
-        <p className="text-xs text-neutral-500">Sum of all five FSR sensors</p>
+        <p className="text-xs text-neutral-500">
+          Sum of all {SENSORS.length} FSR sensors
+        </p>
       </div>
 
       <div className="w-px bg-neutral-200" />
@@ -129,7 +156,10 @@ const FsrOverview = () => {
       <div className="flex min-w-80 flex-[2] flex-col justify-between gap-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold">Calibration</p>
+            <div className="flex items-center gap-3">
+              <p className="font-semibold">Calibration</p>
+              <MotorIndicator status={motorStatus} />
+            </div>
             <Crosshair />
           </div>
           {isCalibratingFsr ? (

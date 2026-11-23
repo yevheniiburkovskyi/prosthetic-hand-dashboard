@@ -19,9 +19,9 @@ import { useScrollingWindow } from '@/hooks/useScrollingWindow';
 import { CHART_BUFFER_SECONDS, CHART_WINDOW_SECONDS } from '@/hooks/useSensor';
 import {
   formatSecondsTick,
-  SINGLE_FINGER_CHART_CONFIG,
+  SINGLE_SENSOR_CHART_CONFIG,
 } from '@/lib/chartConfig';
-import { FINGER_LABELS, FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
+import { SENSOR_LABELS, SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
 import {
   MIN_ANALYSIS_SECONDS,
   TOLERANCE_PERCENT,
@@ -32,7 +32,7 @@ import {
   type Verdict,
 } from '@/lib/signalAnalysis';
 import { downloadFile, formatTime, toCsv } from '@/lib/utils';
-import type { Finger, SensorSample } from '@/types/sensorType';
+import type { SensorId, SensorSample } from '@/types/sensorType';
 
 const Y_AXIS_DOMAIN = [0, MAX_FSR_VALUE];
 
@@ -113,7 +113,7 @@ const ChannelSummary = ({ report }: { report: ChannelReport }) => (
 );
 
 interface ChannelChartProps {
-  finger: Finger;
+  sensor: SensorId;
   data: SensorSample[];
   xAxisDomain?: [number, number];
   report?: ChannelReport;
@@ -121,7 +121,7 @@ interface ChannelChartProps {
 }
 
 const ChannelChart = ({
-  finger,
+  sensor,
   data,
   xAxisDomain,
   report,
@@ -133,8 +133,8 @@ const ChannelChart = ({
   return (
     <ChartLineMultiple
       data={data}
-      config={SINGLE_FINGER_CHART_CONFIG[finger]}
-      title={FINGER_LABELS[finger]}
+      config={SINGLE_SENSOR_CHART_CONFIG[sensor]}
+      title={SENSOR_LABELS[sensor]}
       xAxisKey="time"
       xLabel="Time (s)"
       yLabel="FSR"
@@ -167,10 +167,10 @@ const LiveCharts = ({ samples }: { samples: SensorSample[] }) => {
 
   return (
     <ChannelGrid>
-      {FINGERS.map((finger) => (
+      {SENSORS.map((sensor) => (
         <ChannelChart
-          key={finger}
-          finger={finger}
+          key={sensor}
+          sensor={sensor}
           data={liveData}
           xAxisDomain={xAxisDomain}
         />
@@ -197,7 +197,7 @@ const FsrMeasurement = () => {
   const duration = samples.at(-1)?.time ?? 0;
   const sampleRate = duration > 0 ? (samples.length - 1) / duration : 0;
   const stableCount = report
-    ? FINGERS.filter((f) => report.channels[f].verdict === 'ok').length
+    ? SENSORS.filter((f) => report.channels[f].verdict === 'ok').length
     : 0;
 
   const hint = (() => {
@@ -210,7 +210,7 @@ const FsrMeasurement = () => {
         : `Record at least ${MIN_ANALYSIS_SECONDS} s to analyze the signal.`;
     }
     return hasDataSource
-      ? 'Calibrate with the hand relaxed (optional), then press Start to record all five sensors.'
+      ? `Calibrate with the hand relaxed (optional), then press Start to record all ${SENSORS.length} sensors.`
       : 'Connect the device or enable demo mode to start a measurement.';
   })();
 
@@ -279,7 +279,7 @@ const FsrMeasurement = () => {
                     className="h-8"
                   />
                   <span className="text-sm text-neutral-500">
-                    {stableCount} of {FINGERS.length} sensors stable
+                    {stableCount} of {SENSORS.length} sensors stable
                   </span>
                 </div>
               </div>
@@ -296,12 +296,12 @@ const FsrMeasurement = () => {
         <LiveCharts samples={samples} />
       ) : (
         <ChannelGrid>
-          {FINGERS.map((finger) => (
+          {SENSORS.map((sensor) => (
             <ChannelChart
-              key={finger}
-              finger={finger}
+              key={sensor}
+              sensor={sensor}
               data={samples}
-              report={report?.channels[finger]}
+              report={report?.channels[sensor]}
               dropouts={report?.dropouts}
             />
           ))}

@@ -13,9 +13,9 @@ import {
   MIN_CALIBRATION_SAMPLES,
   type Calibration,
   type CorrectionTarget,
-  type FingerCorrection,
+  type SensorCorrection,
 } from '@/lib/calibration';
-import { EMPTY_READINGS, FINGERS } from '@/lib/constants';
+import { EMPTY_READINGS, SENSORS } from '@/lib/constants';
 import {
   DEFAULT_DEMO_SETTINGS,
   DEMO_INTERVAL_MS,
@@ -23,7 +23,7 @@ import {
   isDemoPacketDropped,
   type DemoSettings,
 } from '@/lib/demo';
-import type { Finger, HandReadings, SensorKind } from '@/types/sensorType';
+import type { SensorId, HandReadings, SensorKind } from '@/types/sensorType';
 import {
   createContext,
   useCallback,
@@ -37,13 +37,14 @@ import {
 import { toast } from 'sonner';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+export type MotorStatus = 'stopped' | 'running';
 
 type AllReadings = Record<SensorKind, HandReadings>;
 type ReadingsListener = (readings: HandReadings) => void;
 
 interface BLEContextType {
   status: ConnectionStatus;
-  /** Latest reading per sensor kind and finger. */
+  /** Latest reading per sensor kind and sensor. */
   readings: AllReadings;
   connect: () => Promise<void>;
   disconnect: () => void;
@@ -60,6 +61,8 @@ interface BLEContextType {
   isCalibratingFsr: boolean;
   /** Connected firmware accepts corrections over BLE. */
   deviceSupportsCalibration: boolean;
+  /** Calibration motor; runs while calibration measures the sensors. */
+  motorStatus: MotorStatus;
   /**
    * Measures FSR noise at rest, computes a per-sensor correction and sends it
    * to the device (or applies it in the app if the firmware can't take it).
@@ -85,24 +88,24 @@ const loadDemoSettings = (): DemoSettings => {
   }
 };
 
-type CorrectionParams = Pick<FingerCorrection, 'offset' | 'deadband' | 'alpha'>;
+type CorrectionParams = Pick<SensorCorrection, 'offset' | 'deadband' | 'alpha'>;
 const NO_CORRECTION: CorrectionParams = { offset: 0, deadband: 0, alpha: 1 };
 
 const writeCorrections = async (
   characteristic: BluetoothRemoteGATTCharacteristic,
-  corrections: Record<Finger, CorrectionParams>
+  corrections: Record<SensorId, CorrectionParams>
 ) => {
-  // One small write per finger keeps packets within the default BLE MTU.
-  for (const [index, finger] of FINGERS.entries()) {
+  // One small write per sensor keeps packets within the default BLE MTU.
+  for (const [index, sensor] of SENSORS.entries()) {
     await characteristic.writeValueWithResponse(
-      encodeCorrectionPacket(index, corrections[finger])
+      encodeCorrectionPacket(index, corrections[sensor])
     );
   }
 };
 
 const NO_CORRECTIONS = Object.fromEntries(
-  FINGERS.map((f) => [f, NO_CORRECTION])
-) as Record<Finger, CorrectionParams>;
+  SENSORS.map((f) => [f, NO_CORRECTION])
+) as Record<SensorId, CorrectionParams>;
 
 const APPLIED_MESSAGES: Record<CorrectionTarget, string> = {
   device: 'Calibration sent to the device.',
@@ -132,6 +135,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
   const [isCalibratingFsr, setIsCalibratingFsr] = useState(false);
   const [deviceSupportsCalibration, setDeviceSupportsCalibration] =
     useState(false);
+  const [motorStatus, setMotorStatus] = useState<MotorStatus>('stopped');
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const isManualDisconnectRef = useRef(false);
@@ -202,13 +206,19 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     const samples: HandReadings[] = [];
     calibrationSamplesRef.current = samples;
     setIsCalibratingFsr(true);
+    setMotorStatus('running');
+    toast.info('Motor started');
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, CALIBRATION_DURATION_MS)
-    );
-
-    calibrationSamplesRef.current = null;
-    setIsCalibratingFsr(false);
+    try {
+      await new Promise((resolve) =>
+        setTimeout(resolve, CALIBRATION_DURATION_MS)
+      );
+    } finally {
+      calibrationSamplesRef.current = null;
+      setIsCalibratingFsr(false);
+      setMotorStatus('stopped');
+      toast.info('Motor stopped');
+    }
 
     if (samples.length < MIN_CALIBRATION_SAMPLES) {
       toast.error(
@@ -221,11 +231,11 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     let appliedOn: CorrectionTarget = 'app';
 
     if (isDemoMode) {
-      demoDeviceFilterRef.current = createCorrectionFilter(calibration.fingers);
+      demoDeviceFilterRef.current = createCorrectionFilter(calibration.sensors);
       appliedOn = 'demo-device';
     } else if (calibrationCharRef.current) {
       try {
-        await writeCorrections(calibrationCharRef.current, calibration.fingers);
+        await writeCorrections(calibrationCharRef.current, calibration.sensors);
         appliedOn = 'device';
       } catch (error) {
         console.error('Failed to send calibration:', error);
@@ -234,7 +244,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (appliedOn === 'app') {
-      appFilterRef.current = createCorrectionFilter(calibration.fingers);
+      appFilterRef.current = createCorrectionFilter(calibration.sensors);
     }
 
     setFsrCalibration({ ...calibration, appliedOn });
@@ -337,11 +347,11 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
 
       // A missing characteristic should not take the whole connection down.
       const results = await Promise.allSettled(
-        SENSOR_CHARACTERISTICS.map(async ({ uuid, kind, finger, parse }) => {
+        SENSOR_CHARACTERISTICS.map(async ({ uuid, kind, sensor, parse }) => {
           const characteristic = await service.getCharacteristic(uuid);
           characteristic.addEventListener('characteristicvaluechanged', () => {
             if (characteristic.value) {
-              publish(kind, { [finger]: parse(characteristic.value) });
+              publish(kind, { [sensor]: parse(characteristic.value) });
             }
           });
           await characteristic.startNotifications();
@@ -430,6 +440,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       fsrCalibration,
       isCalibratingFsr,
       deviceSupportsCalibration,
+      motorStatus,
       calibrateFsr,
       resetFsrCalibration,
     }),
@@ -446,6 +457,7 @@ const BLEProvider = ({ children }: { children: ReactNode }) => {
       fsrCalibration,
       isCalibratingFsr,
       deviceSupportsCalibration,
+      motorStatus,
       calibrateFsr,
       resetFsrCalibration,
     ]

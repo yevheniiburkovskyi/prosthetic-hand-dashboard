@@ -1,7 +1,7 @@
-import { FINGERS, MAX_FSR_VALUE } from '@/lib/constants';
+import { SENSORS, MAX_FSR_VALUE } from '@/lib/constants';
 import { FSR_REST_OFFSETS, fsrProfiles } from '@/mocks/fsrMocks';
 import { temperatureProfiles } from '@/mocks/temperatureMocks';
-import type { Finger, HandReadings, SensorKind } from '@/types/sensorType';
+import type { SensorId, HandReadings, SensorKind } from '@/types/sensorType';
 
 /** How often demo mode emits a reading (≈ a real device notification rate). */
 export const DEMO_INTERVAL_MS = 100;
@@ -20,15 +20,15 @@ export const DEFAULT_DEMO_SETTINGS: DemoSettings = {
   noise: false,
 };
 
-/** Each finger oscillates around its own level. */
-export interface FingerWave {
-  /** Typical value for this finger. */
+/** Each sensor oscillates around its own level. */
+export interface SensorWave {
+  /** Typical value for this sensor. */
   center: number;
   /** Max distance from center; value stays within center ± swing. */
   swing: number;
   /** Seconds for one main oscillation. */
   period: number;
-  /** Phase offset in radians, so fingers don't move in lockstep. */
+  /** Phase offset in radians, so sensors don't move in lockstep. */
   phase: number;
   /** Simulated measurement problem, to exercise signal analysis. */
   fault?: DemoFault;
@@ -53,7 +53,7 @@ const PACKET_GAP_CYCLE_MS = 20_000;
 const PACKET_GAP_START_MS = 12_000;
 const PACKET_GAP_MS = 600;
 
-export type DemoProfile = Record<Finger, FingerWave>;
+export type DemoProfile = Record<SensorId, SensorWave>;
 
 interface DemoSource {
   profiles: Record<DemoScenario, DemoProfile>;
@@ -65,7 +65,7 @@ interface DemoSource {
   /** Random per-sample noise amplitude (±) when noise is on. */
   noise: number;
   /** Unloaded sensor reading added when noise is on. */
-  restOffsets?: Record<Finger, number>;
+  restOffsets?: Record<SensorId, number>;
 }
 
 const DEMO_SOURCES: Record<SensorKind, DemoSource> = {
@@ -92,24 +92,24 @@ const DEMO_SOURCES: Record<SensorKind, DemoSource> = {
 const TAU = Math.PI * 2;
 
 /** Slow main wave plus a faster harmonic; result stays within [-1, 1]. */
-const wave = (t: number, { period, phase }: FingerWave) =>
+const wave = (t: number, { period, phase }: SensorWave) =>
   0.75 * Math.sin((TAU * t) / period + phase) +
   0.25 * Math.sin((TAU * t) / (period * 0.37) + phase * 2);
 
-/** Fast low-amplitude wobble in [-1, 1], different per finger. */
+/** Fast low-amplitude wobble in [-1, 1], different per sensor. */
 const tremor = (t: number, seed: number) =>
   Math.sin(t * 9.1 + seed) * 0.6 + Math.sin(t * 17.3 + seed * 2.1) * 0.4;
 
 const signalAt = (
   t: number,
-  fingerWave: FingerWave,
+  sensorWave: SensorWave,
   tremorAmp: number,
   seed: number
 ) =>
   Math.max(
     0,
-    fingerWave.center +
-      fingerWave.swing * wave(t, fingerWave) +
+    sensorWave.center +
+      sensorWave.swing * wave(t, sensorWave) +
       tremorAmp * tremor(t, seed)
   );
 
@@ -172,25 +172,25 @@ export const getDemoReadings = (
   const timestamp = Math.round(elapsedMs);
 
   return Object.fromEntries(
-    FINGERS.map((finger, i) => {
-      const fingerWave = profile[finger];
+    SENSORS.map((sensor, i) => {
+      const sensorWave = profile[sensor];
       const signalAtTime = (time: number) =>
-        signalAt(time, fingerWave, source.tremor, i * 1.7);
+        signalAt(time, sensorWave, source.tremor, i * 1.7);
       const isResting = resting && kind === 'fsr';
 
       let value = isResting ? 0 : signalAtTime(t);
       if (noise) {
         value +=
-          (source.restOffsets?.[finger] ?? 0) +
+          (source.restOffsets?.[sensor] ?? 0) +
           (Math.random() * 2 - 1) * source.noise;
       }
       // Faults are off while calibrating so they don't skew the baseline.
-      if (fingerWave.fault && !isResting) {
-        value = applyFault(fingerWave.fault, value, t, signalAtTime);
+      if (sensorWave.fault && !isResting) {
+        value = applyFault(sensorWave.fault, value, t, signalAtTime);
       }
 
       return [
-        finger,
+        sensor,
         {
           value: round(
             Math.min(source.max, Math.max(source.min, value)),

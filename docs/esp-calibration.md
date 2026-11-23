@@ -17,20 +17,20 @@ same correction itself (shown as "applied in the app").
 
 ## Packet
 
-One 7-byte write per finger, little-endian:
+One 7-byte write per sensor, little-endian:
 
 | Byte | Type     | Field        | Notes                                           |
 | ---- | -------- | ------------ | ----------------------------------------------- |
-| 0    | `uint8`  | finger index | 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky     |
+| 0    | `uint8`  | sensor index | 0–3 for Sensor 1–4                              |
 | 1–2  | `int16`  | offset       | raw reading with no load; subtracted first      |
 | 3–4  | `uint16` | dead band    | subtracted after filtering; result clamped at 0 |
 | 5–6  | `uint16` | alpha × 1000 | EMA weight of the newest sample, 1–1000         |
 
 `offset = 0, dead band = 0, alpha = 1000` means **no correction**. The app
-sends this for all fingers right after connecting, on Reset, and before each
+sends this for all sensors right after connecting, on Reset, and before each
 new calibration (so it measures the sensors' raw noise).
 
-Example (ring: offset −12, dead band 122, alpha 0.258): `03 f4 ff 7a 00 02 01`
+Example (Sensor 4: offset −12, dead band 122, alpha 0.258): `03 f4 ff 7a 00 02 01`
 
 ## Processing, per sample
 
@@ -50,7 +50,7 @@ keep the two in sync.
 #include <BLEDevice.h>
 
 #define CALIBRATION_UUID "6e3a1f52-8c4d-4b7a-9f21-3d5c8e7a1b90"
-constexpr int FINGER_COUNT = 5;
+constexpr int SENSOR_COUNT = 4;
 constexpr uint16_t ADC_MAX = 4050;
 
 struct Correction {
@@ -61,7 +61,7 @@ struct Correction {
   bool primed = false;
 };
 
-Correction corrections[FINGER_COUNT];
+Correction corrections[SENSOR_COUNT];
 
 class CalibrationCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *characteristic) override {
@@ -70,10 +70,10 @@ class CalibrationCallbacks : public BLECharacteristicCallbacks {
     if (value.length() != 7) return;
     const uint8_t *p = reinterpret_cast<const uint8_t *>(value.c_str());
 
-    uint8_t finger = p[0];
-    if (finger >= FINGER_COUNT) return;
+    uint8_t sensor = p[0];
+    if (sensor >= SENSOR_COUNT) return;
 
-    Correction &c = corrections[finger];
+    Correction &c = corrections[sensor];
     c.offset = static_cast<int16_t>(p[1] | (p[2] << 8));
     c.deadband = p[3] | (p[4] << 8);
     uint16_t alphaMilli = p[5] | (p[6] << 8);
@@ -87,10 +87,10 @@ class CalibrationCallbacks : public BLECharacteristicCallbacks {
 //       CALIBRATION_UUID, BLECharacteristic::PROPERTY_WRITE);
 //   calibration->setCallbacks(new CalibrationCallbacks());
 
-uint16_t applyCorrection(int finger, uint16_t raw) {
+uint16_t applyCorrection(int sensor, uint16_t raw) {
   if (raw >= ADC_MAX * 0.99f) return ADC_MAX;
 
-  Correction &c = corrections[finger];
+  Correction &c = corrections[sensor];
   float input = static_cast<float>(raw) - c.offset;
   if (!c.primed) {
     c.filtered = input;
@@ -103,7 +103,7 @@ uint16_t applyCorrection(int finger, uint16_t raw) {
 }
 
 // Before notifying an FSR value:
-//   uint16_t value = applyCorrection(fingerIndex, analogRead(pin));
+//   uint16_t value = applyCorrection(sensorIndex, analogRead(pin));
 ```
 
 Corrections live in RAM; the app re-sends them after every connect, so they

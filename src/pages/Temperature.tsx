@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/Card';
 import { useBLEContext } from '@/context/BLEContext';
 import {
-  FINGER_LABELS,
-  FINGERS,
+  SENSOR_LABELS,
+  SENSORS,
   TEMPERATURE_THRESHOLDS,
 } from '@/lib/constants';
 import { getLevel, LEVEL_STYLES, type Level } from '@/lib/levels';
@@ -32,12 +32,12 @@ const Temperature = () => {
       />
       <div className="flex flex-col gap-6 overflow-auto px-6 pb-6">
         <ul className="flex w-full flex-wrap gap-4">
-          {FINGERS.map((finger) => {
-            const { value } = readings.temperature[finger];
+          {SENSORS.map((sensor) => {
+            const { value } = readings.temperature[sensor];
             const level = getLevel(value, TEMPERATURE_THRESHOLDS);
             const styles = LEVEL_STYLES[level];
             return (
-              <li key={finger} className="flex-1">
+              <li key={sensor} className="flex-1">
                 <Card
                   className={cn(
                     'flex flex-col justify-between gap-4',
@@ -45,7 +45,7 @@ const Temperature = () => {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{FINGER_LABELS[finger]}</p>
+                    <p className="font-semibold">{SENSOR_LABELS[sensor]}</p>
                     <Thermometer stroke={styles.icon} />
                   </div>
                   <div className="flex items-center justify-between">

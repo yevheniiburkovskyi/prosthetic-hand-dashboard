@@ -7,8 +7,8 @@ import Card from '@/components/ui/Card';
 import { Progress } from '@/components/ui/progress';
 import { useBLEContext } from '@/context/BLEContext';
 import {
-  FINGER_LABELS,
-  FINGERS,
+  SENSOR_LABELS,
+  SENSORS,
   FSR_THRESHOLDS,
   MAX_FSR_VALUE,
 } from '@/lib/constants';
@@ -31,12 +31,12 @@ const FSR = () => {
         <FsrOverview />
 
         <ul className="flex w-full flex-wrap gap-4">
-          {FINGERS.map((finger) => {
-            const { value } = readings.fsr[finger];
+          {SENSORS.map((sensor) => {
+            const { value } = readings.fsr[sensor];
             const level = getLevel(value, FSR_THRESHOLDS);
             const styles = LEVEL_STYLES[level];
             return (
-              <li key={finger} className="flex-1">
+              <li key={sensor} className="flex-1">
                 <Card
                   className={cn(
                     'flex flex-col justify-between gap-4',
@@ -44,7 +44,7 @@ const FSR = () => {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{FINGER_LABELS[finger]}</p>
+                    <p className="font-semibold">{SENSOR_LABELS[sensor]}</p>
                     <Gauge stroke={styles.icon} />
                   </div>
                   <div>

@@ -1,5 +1,5 @@
 import { useBLEContext } from '@/context/BLEContext';
-import { FINGERS } from '@/lib/constants';
+import { SENSORS } from '@/lib/constants';
 import type {
   HandReadings,
   SensorKind,
@@ -13,17 +13,13 @@ const CHART_BUFFER_SECONDS = CHART_WINDOW_SECONDS + 1;
 
 const toSample = (readings: HandReadings): SensorSample => {
   const latestTimestamp = Math.max(
-    ...FINGERS.map((f) => readings[f].timestamp)
+    ...SENSORS.map((f) => readings[f].timestamp)
   );
 
   return {
     time: latestTimestamp / 1000,
-    thumb: readings.thumb.value,
-    index: readings.index.value,
-    middle: readings.middle.value,
-    ring: readings.ring.value,
-    pinky: readings.pinky.value,
-  };
+    ...Object.fromEntries(SENSORS.map((s) => [s, readings[s].value])),
+  } as SensorSample;
 };
 
 const useSensor = (kind: SensorKind) => {
